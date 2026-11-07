@@ -146,24 +146,32 @@
     }
   }
 
-  // Click toggles the dropdown; moving more than 4 px turns the press into a drag of the window.
-  var down = null;
+  // Click toggles the dropdown; moving more than 4 px turns the press into a drag. The window is
+  // moved by the Rust side to follow the cursor from the moment of the press (no trailing).
+  var down = null, dragging = false, queued = false;
   pill.addEventListener('pointerdown', function (e) {
     if (e.button !== 0) return;
     down = { x: e.screenX, y: e.screenY };
+    dragging = false;
+    try { pill.setPointerCapture(e.pointerId); } catch (_) {}
+    invoke('drag_begin');
   });
   window.addEventListener('pointermove', function (e) {
     if (!down) return;
-    if (Math.abs(e.screenX - down.x) > 4 || Math.abs(e.screenY - down.y) > 4) {
-      down = null;
-      appWindow.startDragging();
+    if (!dragging && (Math.abs(e.screenX - down.x) > 4 || Math.abs(e.screenY - down.y) > 4)) dragging = true;
+    if (dragging && !queued) {
+      queued = true;
+      requestAnimationFrame(function () { queued = false; invoke('drag_move'); });
     }
   });
-  window.addEventListener('pointerup', function () {
+  function release() {
     if (!down) return;
-    down = null;
-    setExpanded(!expanded);
-  });
+    var wasDrag = dragging;
+    down = null; dragging = false;
+    if (!wasDrag) setExpanded(!expanded);
+  }
+  window.addEventListener('pointerup', release);
+  window.addEventListener('pointercancel', function () { down = null; dragging = false; });
 
   document.addEventListener('mouseenter', function () { hovering = true; applyFade(); });
   document.addEventListener('mouseleave', function () { hovering = false; applyFade(); });

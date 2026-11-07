@@ -17,6 +17,8 @@ struct Shared {
     machine: Mutex<TimerMachine>,
     /// How far the window was shifted (physical px) to keep the dropdown on screen.
     shift: Mutex<(i32, i32)>,
+    /// Cursor and window position (physical px) at the moment a drag began.
+    drag: Mutex<Option<((f64, f64), (i32, i32))>>,
 }
 
 fn now() -> f64 {
@@ -163,6 +165,24 @@ fn set_expanded(window: WebviewWindow, shared: State<Shared>, expanded: bool) ->
     Ok(Flip { up: sy != 0, left: sx != 0 })
 }
 
+/// Dragging is done by hand: the window moves by exactly how far the cursor has moved since the
+/// press, so it never trails behind even when the mouse starts fast.
+#[tauri::command]
+fn drag_begin(window: WebviewWindow, shared: State<Shared>) -> Result<(), String> {
+    let c = window.cursor_position().map_err(|e| e.to_string())?;
+    let p = window.outer_position().map_err(|e| e.to_string())?;
+    *shared.drag.lock().unwrap() = Some(((c.x, c.y), (p.x, p.y)));
+    Ok(())
+}
+
+#[tauri::command]
+fn drag_move(window: WebviewWindow, shared: State<Shared>) -> Result<(), String> {
+    let Some(((cx, cy), (px, py))) = *shared.drag.lock().unwrap() else { return Ok(()) };
+    let c = window.cursor_position().map_err(|e| e.to_string())?;
+    let pos = PhysicalPosition::new(px + (c.x - cx).round() as i32, py + (c.y - cy).round() as i32);
+    window.set_position(pos).map_err(|e| e.to_string())
+}
+
 fn show_widget(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -177,8 +197,8 @@ fn main() {
     tauri::Builder::default()
         // A second launch (for example from the Start menu) just brings the widget back.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_widget(app)))
-        .manage(Shared { machine: Mutex::new(machine), shift: Mutex::new((0, 0)) })
-        .invoke_handler(tauri::generate_handler![get_view, send, set_expanded])
+        .manage(Shared { machine: Mutex::new(machine), shift: Mutex::new((0, 0)), drag: Mutex::new(None) })
+        .invoke_handler(tauri::generate_handler![get_view, send, set_expanded, drag_begin, drag_move])
         .setup(|app| {
             // Tray icon: static, lives in the overflow area unless the user pins it.
             let show = MenuItem::with_id(app, "show", "Show BreakBar", true, None::<&str>)?;
