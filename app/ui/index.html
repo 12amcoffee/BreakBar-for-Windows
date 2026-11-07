@@ -4,23 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BreakBar</title>
+<link rel="stylesheet" href="common.css">
 <style>
-  :root {
-    --tomato: #E5432B;
-    --card: #FBF6EC;
-    --ink: #2B2A28;
-    --ink-soft: #7A756C;
-    --line: rgba(0, 0, 0, .10);
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
-    font: 14px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--ink);
-    -webkit-user-select: none; user-select: none; cursor: default; }
+  html, body { height: 100%; background: transparent; overflow: hidden; -webkit-user-select: none; user-select: none; }
   #root { height: 100%; padding: 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
   #root.up { flex-direction: column-reverse; }
   #root.left { align-items: flex-end; }
 
-  .pill { height: 40px; min-width: 40px; padding: 0 14px; display: inline-flex; align-items: center; gap: 9px;
+  .pill { height: 40px; min-width: 40px; padding: 0 14px; display: inline-flex; align-items: center; gap: 9px; flex: none;
     background: var(--card); border: 1px solid var(--line); border-radius: 20px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, .18); transition: opacity .25s ease, background .2s ease, color .2s ease; }
   .pill.glyphonly { padding: 0 12px; }
@@ -30,33 +21,71 @@
   /* Faded when the mouse is away, solid when it is over the widget or the dropdown is open. */
   .pill.faded { opacity: .55; }
 
-  .panel { width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, .22); padding: 14px; display: none; flex: 1; min-height: 0; flex-direction: column; gap: 12px; }
+  .panel { width: 100%; flex: none; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .22); padding: 12px; display: none; flex-direction: column; gap: 10px; }
   .open .panel { display: flex; }
-  .state { font-weight: 600; }
-  .sub { color: var(--ink-soft); font-size: 12.5px; }
+
+  .main { width: 100%; height: 36px; border-radius: 9px; background: var(--tomato); color: #fff; font-weight: 600;
+    font-variant-numeric: tabular-nums; font-size: 14px; }
+  .main:hover { background: var(--tomato-dark); }
+
+  .progress { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--ink-soft); font-size: 13px; }
   .dots { display: flex; gap: 6px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink-soft); }
   .dot.done { background: var(--tomato); border-color: var(--tomato); }
   .dot.cur { border-color: var(--tomato); }
-  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
-  button { font: inherit; border: 0; border-radius: 8px; padding: 7px 13px; background: rgba(0, 0, 0, .07); color: var(--ink); cursor: pointer; }
-  button:hover { background: rgba(0, 0, 0, .12); }
-  button.primary { background: var(--tomato); color: #fff; }
-  button.primary:hover { background: #cf3a24; }
-  .note { color: var(--ink-soft); font-size: 12px; }
+
+  .actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .actions button { height: 28px; padding: 0 12px; border-radius: 8px; background: var(--control); font-size: 12.5px; }
+  .actions button:hover { background: var(--hover); }
+
+  .pills { display: flex; gap: 6px; }
+  .ipill { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 9px;
+    background: var(--control); }
+  .ipill:hover { background: var(--hover); }
+  .ipill .n { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ipill .l { font-size: 10.5px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-soft); }
+  .ipill.sel { background: var(--tomato); color: #fff; }
+  .ipill.sel .l { color: rgba(255, 255, 255, .75); }
+  .stepper { display: flex; align-items: center; gap: 6px; padding: 0 4px; }
+  .stepper .name { flex: 1; white-space: nowrap; }
+  .stepper .unit { color: var(--ink-soft); }
+  .stepper .num { width: 40px; }
+
+  hr { border: 0; border-top: 1px solid var(--line); margin: 0; }
+  .menu { display: flex; flex-direction: column; }
+  .menu button { text-align: left; background: none; padding: 6px 8px; border-radius: 7px; }
+  .menu button:hover:not(:disabled) { background: var(--control); }
+  .menu button:disabled { color: var(--ink-soft); cursor: default; }
 </style>
 </head>
 <body>
 <div id="root">
   <div class="pill glyphonly faded" id="pill"><span id="glyph"></span><span class="t" id="time" hidden></span></div>
   <div class="panel" id="panel">
-    <div><div class="state" id="stateLabel">Not running</div><div class="sub" id="sessionLabel"></div></div>
-    <div class="dots" id="dots"></div>
-    <div class="btns" id="btns"></div>
-    <div class="note">Durations, sounds and the other settings arrive in the next step.</div>
+    <button class="main" id="main"></button>
+    <div class="progress"><div class="dots" id="dots"></div><span id="progressText"></span></div>
+    <div class="actions" id="actions" hidden></div>
+    <div>
+      <div class="pills" id="pills"></div>
+      <div class="stepper" id="stepper" hidden style="margin-top:8px">
+        <span class="name" id="stepName"></span>
+        <button class="step" id="stepMinus" aria-label="Decrease">&minus;</button>
+        <input class="num" id="stepNum" aria-label="Minutes">
+        <span class="unit">min</span>
+        <button class="step" id="stepPlus" aria-label="Increase">+</button>
+      </div>
+    </div>
+    <hr>
+    <div class="menu">
+      <button id="mReset">Reset set</button>
+      <button id="mSettings">Settings…</button>
+      <button id="mAbout">About BreakBar</button>
+      <button id="mQuit">Close</button>
+    </div>
   </div>
 </div>
+<script src="common.js"></script>
 <script>
 (function () {
   var tauri = window.__TAURI__;
@@ -74,17 +103,28 @@
     longRest: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14C3 10 2 7.500 4 5.500 5.500 4 7.300 4.600 8 6c.7-1.400 2.500-2 4-.5 2 2 1 4.500-4 8.500z"/></svg>',
     waitingToWork: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.500v11l9-5.500z"/></svg>'
   };
-  var LABELS = {
-    idle: 'Not running', working: 'Working', paused: 'Paused', waitingToRest: 'Time for a rest',
-    snoozed: 'Snoozed', shortRest: 'Resting', longRest: 'Long rest', waitingToWork: 'Ready to work'
-  };
+  var INTERVALS = [
+    { key: 'workMinutes', pill: 'Work', full: 'Work session' },
+    { key: 'shortRestMinutes', pill: 'Short', full: 'Short rest' },
+    { key: 'longRestMinutes', pill: 'Long', full: 'Long rest' }
+  ];
 
   var $ = function (id) { return document.getElementById(id); };
-  var root = $('root'), pill = $('pill'), panel = $('panel');
-  var expanded = false, hovering = false, view = null;
+  var root = $('root'), pill = $('pill');
+  var expanded = false, hovering = false, view = null, settings = null, openInterval = null;
 
-  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function isWaiting(v) { return v && (v.icon === 'waitingToRest' || v.icon === 'waitingToWork'); }
 
+  // ---- the number box in the interval stepper
+  var stepBox = BB.numberBox($('stepNum'), [1, 180], function (n) { saveInterval(n); });
+  function saveInterval(n) {
+    if (openInterval === null || !settings) return;
+    var next = Object.assign({}, settings); next[INTERVALS[openInterval].key] = n;
+    invoke('update_settings', { settings: next }).then(function (s) { settings = s; renderSettings(); });
+  }
+
+  // ---- drawing
   function render(v) {
     view = v;
     $('glyph').innerHTML = ICONS[v.icon] || GLYPH;
@@ -92,62 +132,122 @@
     $('time').hidden = !hasText;
     $('time').textContent = hasText ? v.text : '';
     pill.classList.toggle('glyphonly', !hasText);
-    pill.classList.toggle('waiting', v.icon === 'waitingToRest' || v.icon === 'waitingToWork');
+    pill.classList.toggle('waiting', isWaiting(v));
     applyFade();
+    if (!expanded) return;
+    renderMain(); renderProgress(); renderActions();
+    $('mReset').disabled = !v.canReset;
+    fit();
+  }
 
-    $('stateLabel').textContent = LABELS[v.icon] || '';
-    var dots = $('dots'); dots.textContent = '';
-    for (var i = 0; i < v.dots.total; i++) {
-      var d = el('span', 'dot');
-      if (i < v.dots.done) d.classList.add('done');
-      else if (i === v.dots.done && v.dots.hasCurrent) d.classList.add('cur');
-      dots.appendChild(d);
-    }
-    $('sessionLabel').textContent = v.dots.done + ' of ' + v.dots.total + ' sessions done';
+  function renderMain() {
+    var a = view.actions, b = $('main');
+    var label, clock = false;
+    if (a.canStartRest) label = 'Start resting';
+    else if (a.canStartWork) label = 'Start working';
+    else if (view.idle) label = 'Start';
+    else if (b.matches(':hover')) label = 'Stop';
+    else { label = view.text || ''; clock = true; }
+    if (b.textContent !== label) b.textContent = label;
+  }
 
-    var btns = $('btns'); btns.textContent = '';
-    function add(label, ev, primary) {
-      var b = el('button', primary ? 'primary' : '', label);
-      b.addEventListener('click', function () { invoke('send', { event: ev }); });
-      btns.appendChild(b);
+  function renderProgress() {
+    var v = view, p = v.progress, dots = $('dots');
+    if (dots.childElementCount !== v.dots.total) {
+      dots.textContent = '';
+      for (var i = 0; i < v.dots.total; i++) dots.appendChild(el('span', 'dot'));
     }
-    var a = v.actions;
-    if (v.idle) add('Start working', 'start', true);
-    if (a.canStartRest) add('Start resting', 'startRest', true);
-    if (a.canStartWork) add('Start working', 'startWork', true);
-    if (a.canResume) add('Resume', 'resume', true);
+    for (var j = 0; j < dots.children.length; j++) {
+      dots.children[j].className = 'dot' + (j < v.dots.done ? ' done' : (j === v.dots.done && v.dots.hasCurrent ? ' cur' : ''));
+    }
+    var t;
+    if (p.kind === 'session') t = 'Session ' + p.current + ' of ' + p.of;
+    else if (p.kind === 'done') t = p.done + ' of ' + p.of + ' done' + (p.longBreakNext ? ' · long break next' : '');
+    else if (p.kind === 'longBreak') t = 'Long break';
+    else t = 'Long break after this session';
+    $('progressText').textContent = t;
+  }
+
+  function renderActions() {
+    var a = view.actions, box = $('actions'), s = settings || {};
+    var key = [a.canPause, a.canResume, a.canSnooze, a.canExtend, a.canSkip, view.state, s.snoozeMinutes, s.extendMinutes].join('|');
+    if (box.dataset.key === key) return;
+    box.dataset.key = key; box.textContent = '';
+    function add(label, ev) { var b = el('button', '', label); b.addEventListener('click', function () { invoke('send', { event: ev }); }); box.appendChild(b); }
     if (a.canPause) add('Pause', 'pause');
-    if (a.canSnooze) add('Snooze', 'snooze');
-    if (a.canExtend) add('Extend', 'extend');
-    if (a.canSkip) add('Skip', 'skip');
-    if (!v.idle) add('Stop', 'stop');
+    if (a.canResume) add('Resume', 'resume');
+    if (a.canSnooze) add('Snooze ' + s.snoozeMinutes + ' min', 'snooze');
+    if (a.canExtend) add('+' + s.extendMinutes + ' min', 'extend');
+    if (a.canSkip) add(view.state === 'awaitingWork' ? 'Skip' : 'Skip rest', 'skip');
+    box.hidden = box.childElementCount === 0;
   }
 
-  function applyFade() {
-    // Solid while the dropdown is open, while the mouse is over the widget, and while it waits for you.
-    var waiting = view && (view.icon === 'waitingToRest' || view.icon === 'waitingToWork');
-    pill.classList.toggle('faded', !(expanded || hovering || waiting));
+  function renderSettings() {
+    if (!settings) return;
+    var box = $('pills'); box.textContent = '';
+    INTERVALS.forEach(function (iv, i) {
+      var b = el('button', 'ipill' + (openInterval === i ? ' sel' : ''));
+      b.appendChild(el('span', 'n', String(settings[iv.key])));
+      b.appendChild(el('span', 'l', iv.pill));
+      b.addEventListener('click', function () { openInterval = (openInterval === i) ? null : i; renderSettings(); fit(); });
+      box.appendChild(b);
+    });
+    $('stepper').hidden = openInterval === null;
+    if (openInterval !== null) {
+      $('stepName').textContent = INTERVALS[openInterval].full;
+      stepBox.set(settings[INTERVALS[openInterval].key]);
+    }
+    if (view) { renderActions(); renderProgress(); }
   }
+
+  $('stepMinus').addEventListener('click', function () { saveInterval(Math.max(1, settings[INTERVALS[openInterval].key] - 1)); });
+  $('stepPlus').addEventListener('click', function () { saveInterval(Math.min(180, settings[INTERVALS[openInterval].key] + 1)); });
+
+  // ---- fade, expand, collapse
+  function applyFade() { pill.classList.toggle('faded', !(expanded || hovering || isWaiting(view))); }
+
+  var lastHeight = 0;
+  /** Tells the window how tall the dropdown is now, so it never leaves an invisible click-blocking area. */
+  function fit() {
+    if (!expanded) return;
+    var h = Math.ceil(pill.offsetHeight + 6 + $('panel').offsetHeight + 8);
+    if (h === lastHeight) return;
+    lastHeight = h;
+    invoke('set_expanded', { expanded: true, height: h }).then(applyFlip);
+  }
+  function applyFlip(f) { root.classList.toggle('up', f.up); root.classList.toggle('left', f.left); }
 
   function setExpanded(next) {
     if (next === expanded) return;
     expanded = next;
     if (next) {
-      invoke('set_expanded', { expanded: true }).then(function (f) {
-        root.classList.toggle('up', f.up);
-        root.classList.toggle('left', f.left);
-        root.classList.add('open');
-        applyFade();
-      });
+      root.classList.add('open');
+      if (view) { renderMain(); renderProgress(); renderActions(); $('mReset').disabled = !view.canReset; }
+      renderSettings();
+      lastHeight = 0; fit();
     } else {
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       root.classList.remove('open', 'up', 'left');
+      openInterval = null; renderSettings();
       invoke('set_expanded', { expanded: false });
-      applyFade();
     }
+    applyFade();
   }
 
-  // Click toggles the dropdown; moving more than 4 px turns the press into a drag. The window is
-  // moved by the Rust side to follow the cursor from the moment of the press (no trailing).
+  // ---- buttons
+  $('main').addEventListener('click', function () {
+    var a = view.actions;
+    invoke('send', { event: a.canStartRest ? 'startRest' : a.canStartWork ? 'startWork' : 'toggle' });
+    setExpanded(false);
+  });
+  $('main').addEventListener('mouseenter', function () { if (view) renderMain(); });
+  $('main').addEventListener('mouseleave', function () { if (view) renderMain(); });
+  $('mReset').addEventListener('click', function () { invoke('send', { event: 'resetSet' }); });
+  $('mSettings').addEventListener('click', function () { setExpanded(false); invoke('open_settings', { tab: null }); });
+  $('mAbout').addEventListener('click', function () { setExpanded(false); invoke('open_settings', { tab: 'about' }); });
+  $('mQuit').addEventListener('click', function () { invoke('quit'); });
+
+  // ---- click toggles the dropdown; moving more than 4 px turns the press into a drag (moved by Rust, no trailing)
   var down = null, dragging = false, queued = false;
   pill.addEventListener('pointerdown', function (e) {
     if (e.button !== 0) return;
@@ -164,23 +264,26 @@
       requestAnimationFrame(function () { queued = false; invoke('drag_move'); });
     }
   });
-  function release() {
+  window.addEventListener('pointerup', function () {
     if (!down) return;
     var wasDrag = dragging;
     down = null; dragging = false;
     if (!wasDrag) setExpanded(!expanded);
-  }
-  window.addEventListener('pointerup', release);
+  });
   window.addEventListener('pointercancel', function () { down = null; dragging = false; });
 
   document.addEventListener('mouseenter', function () { hovering = true; applyFade(); });
   document.addEventListener('mouseleave', function () { hovering = false; applyFade(); });
-  // Click away collapses (the widget loses focus).
-  window.addEventListener('blur', function () { setExpanded(false); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setExpanded(false); });
+  window.addEventListener('blur', function () { setExpanded(false); });   // click away collapses
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') setExpanded(false);
+    else if (e.key === 'Enter' && expanded && !stepBox.focused() && e.target.tagName !== 'BUTTON') $('main').click();   // Return = the main button
+  });
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
   tauri.event.listen('view', function (e) { render(e.payload); });
+  tauri.event.listen('settings', function (e) { settings = e.payload; renderSettings(); fit(); });
+  invoke('get_settings').then(function (s) { settings = s; renderSettings(); });
   invoke('get_view').then(render);
 })();
 </script>

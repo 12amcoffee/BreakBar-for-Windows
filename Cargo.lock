@@ -292,6 +292,7 @@ version = "2.0.0"
 dependencies = [
  "breakbar-core",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-single-instance",

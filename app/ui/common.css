@@ -1,0 +1,28 @@
+:root {
+  --tomato: #E5432B;
+  --tomato-dark: #cf3a24;
+  --card: #FBF6EC;
+  --ink: #2B2A28;
+  --ink-soft: #7A756C;
+  --line: rgba(0, 0, 0, .10);
+  --control: rgba(0, 0, 0, .06);
+  --hover: rgba(0, 0, 0, .11);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; color: var(--ink);
+  font: 14px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; cursor: default; }
+button { font: inherit; border: 0; cursor: pointer; color: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--tomato); outline-offset: 1px; }
+
+/* Number box: looks like plain text until you click it */
+.num { width: 44px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: inherit;
+  font: inherit; font-variant-numeric: tabular-nums; text-align: right; padding: 0 7px; }
+.num:hover { background: var(--hover); }
+.num:focus { background: #fff; outline: 2px solid var(--tomato); }
+
+.step { width: 26px; height: 26px; border-radius: 7px; background: var(--control); display: inline-flex;
+  align-items: center; justify-content: center; font-size: 15px; line-height: 1; padding: 0; }
+.step:hover { background: var(--hover); }
+
+/* Without this, any rule that sets `display` would beat the hidden attribute. */
+[hidden] { display: none !important; }
