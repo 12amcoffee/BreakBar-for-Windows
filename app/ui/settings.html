@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BreakBar Settings</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  html, body { height: 100%; background: var(--card); overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+  .tabs { display: flex; gap: 4px; margin: 16px 16px 0; padding: 3px; background: rgba(0, 0, 0, .07); border-radius: 10px; flex: none; }
+  .tab { flex: 1; padding: 5px 0; border-radius: 7px; background: none; font-weight: 500; }
+  .tab:hover:not(.sel) { background: var(--control); }
+  .tab.sel { background: var(--tomato); color: var(--card); }
+  main { flex: 1; overflow-y: auto; padding: 14px 16px 18px; }
+  .group { background: #fff8; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 14px; }
+  .group h3 { margin: 0; padding: 10px 14px 0; font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-soft); }
+  .row { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 7px 14px; }
+  .row + .row, h3 + .row { border-top: 0; }
+  .row:not(:last-child) { border-bottom: 1px solid var(--line); }
+  .row .label { flex: 1; }
+  .row .unit { color: var(--ink-soft); }
+  .hint { padding: 0 14px 10px; color: var(--ink-soft); font-size: 12.5px; }
+  .row.off { opacity: .45; pointer-events: none; }
+  select { font: inherit; color: inherit; background: var(--control); border: 0; border-radius: 7px; padding: 5px 8px; }
+  input[type=range] { width: 200px; accent-color: var(--tomato); }
+  /* Toggle switch */
+  .sw { position: relative; width: 38px; height: 22px; flex: none; }
+  .sw input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .sw i { position: absolute; inset: 0; border-radius: 11px; background: rgba(0, 0, 0, .22); transition: background .15s; pointer-events: none; }
+  .sw i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  .sw input:checked + i { background: var(--tomato); }
+  .sw input:checked + i::after { transform: translateX(16px); }
+  .sw input:focus-visible + i { outline: 2px solid var(--tomato); outline-offset: 2px; }
+  /* Radio rows */
+  .radio { display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer; }
+  .radio input { accent-color: var(--tomato); margin: 0; width: 16px; height: 16px; }
+  .about { text-align: center; padding: 30px 10px; }
+  .about img { width: 72px; height: 72px; }
+  .about h2 { margin: 10px 0 2px; }
+  .about p { color: var(--ink-soft); margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="tabs" id="tabs" role="tablist"></div>
+<main id="page"></main>
+<script src="common.js"></script>
+<script>
+(function () {
+  var tauri = window.__TAURI__, invoke = tauri.core.invoke;
+  var TABS = [['intervals', 'Intervals'], ['breaks', 'Breaks'], ['windows', 'Windows'], ['sounds', 'Sounds'], ['about', 'About']];
+  var settings = null, tab = 'intervals', version = '';
+
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+  function save(key, value) {
+    var next = Object.assign({}, settings); next[key] = value;
+    settings = next;
+    invoke('update_settings', { settings: next }).then(function (s) { settings = s; });
+  }
+
+  // ---- controls
+  function minutes(label, key, range, step) {
+    var row = el('div', 'row'); row.appendChild(el('span', 'label', label));
+    var input = el('input', 'num'); input.setAttribute('aria-label', label);
+    var box = BB.numberBox(input, range, function (n) { save(key, n); render(); });
+    box.set(settings[key]);
+    function bump(d) { save(key, Math.min(range[1], Math.max(range[0], settings[key] + d))); render(); }
+    var minus = el('button', 'step', '−'), plus = el('button', 'step', '+');
+    minus.setAttribute('aria-label', 'Decrease ' + label); plus.setAttribute('aria-label', 'Increase ' + label);
+    minus.onclick = function () { bump(-(step || 1)); }; plus.onclick = function () { bump(step || 1); };
+    row.append(input, el('span', 'unit', 'min'), minus, plus);
+    return row;
+  }
+  function count(label, key, range) {
+    var r = minutes(label, key, range, 1);
+    r.querySelector('.unit').remove();
+    return r;
+  }
+  function toggle(label, key, disabled) {
+    var row = el('div', 'row' + (disabled ? ' off' : '')); row.appendChild(el('span', 'label', label));
+    var sw = el('label', 'sw'), input = el('input'); input.type = 'checkbox'; input.checked = !!settings[key];
+    input.setAttribute('aria-label', label);
+    input.onchange = function () { save(key, input.checked); render(); };
+    sw.append(input, el('i'));
+    row.appendChild(sw);
+    return row;
+  }
+  function select(label, key, options, disabled) {
+    var row = el('div', 'row' + (disabled ? ' off' : '')); row.appendChild(el('span', 'label', label));
+    var sel = el('select'); sel.setAttribute('aria-label', label);
+    options.forEach(function (o) { var op = el('option', '', o[1]); op.value = o[0]; sel.appendChild(op); });
+    sel.value = settings[key];
+    sel.onchange = function () { save(key, sel.value); };
+    row.appendChild(sel);
+    return row;
+  }
+  function slider(label, key) {
+    var row = el('div', 'row'); row.appendChild(el('span', 'label', label));
+    var r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.01; r.value = settings[key];
+    r.setAttribute('aria-label', label);
+    r.oninput = function () { save(key, parseFloat(r.value)); };
+    row.appendChild(r);
+    return row;
+  }
+  function group(title, rows, hint) {
+    var g = el('div', 'group');
+    if (title) g.appendChild(el('h3', '', title));
+    rows.forEach(function (r) { g.appendChild(r); });
+    if (hint) g.appendChild(el('div', 'hint', hint));
+    return g;
+  }
+
+  // ---- tabs
+  var PAGES = {
+    intervals: function () {
+      return [
+        group('Durations', [
+          minutes('Work session', 'workMinutes', [1, 180]),
+          minutes('Short rest', 'shortRestMinutes', [1, 180]),
+          minutes('Long rest', 'longRestMinutes', [1, 180])]),
+        group('Long break', [
+          count('Sessions per set', 'sessionsPerSet', [1, 12]),
+          toggle('Delay long break by one session', 'delayLongBreak'),
+          minutes('Reset set after', 'inactivityResetMinutes', [5, 1440], 5)],
+          'When a long break is due, take a short one now and the long one after the next work session.')];
+    },
+    breaks: function () {
+      var s = settings;
+      var rows = [
+        group(null, [toggle('Continuous cycles', 'continuousCycles')],
+          'Work and rest follow each other with no windows or buttons. Overrides both settings below.'),
+        group(null, [
+          select('When work ends', 'whenWorkEnds', [['startRestAutomatically', 'Start rest automatically'], ['showRestWindow', 'Show Rest window']], s.continuousCycles),
+          select('When rest ends', 'whenRestEnds', [['startWorkAutomatically', 'Start working automatically'], ['showWorkWindow', 'Show Start working window'], ['stopTimer', 'Stop the timer']], s.continuousCycles)])];
+      var controls = [toggle('Allow pausing', 'pauseEnabled'), toggle('Allow extending rest', 'extendEnabled')];
+      if (s.extendEnabled) controls.push(minutes('Extend by', 'extendMinutes', [1, 60]));
+      controls.push(toggle('Allow snoozing rest', 'snoozeEnabled'));
+      if (s.snoozeEnabled) {
+        controls.push(minutes('Snooze for', 'snoozeMinutes', [1, 60]));
+        controls.push(count('Max snoozes per break', 'maxSnoozesPerBreak', [1, 20]));
+      }
+      rows.push(group('Controls', controls));
+      return rows;
+    },
+    windows: function () {
+      var styles = [['small', 'Small floating window'], ['maximised', 'Maximised floating window'],
+                    ['fullScreen', 'Full-screen overlay'], ['banner', 'Notification-style banner']];
+      var rows = styles.map(function (st) {
+        var row = el('div', 'row'), lab = el('label', 'radio'), input = el('input');
+        input.type = 'radio'; input.name = 'style'; input.checked = settings.windowStyle === st[0];
+        input.onchange = function () { save('windowStyle', st[0]); };
+        lab.append(input, el('span', '', st[1]));
+        row.appendChild(lab);
+        return row;
+      });
+      return [group('Window style', rows, 'Used for both the Rest and Start working windows. Esc or Close always dismisses a window. (They appear in a later update; your choice is saved.)')];
+    },
+    sounds: function () {
+      return [
+        group(null, [slider('Windup', 'windupVolume'), slider('Ding', 'dingVolume'), slider('Ticking', 'tickingVolume')],
+          'Zero turns a sound off. (Sound playback arrives in a later update; your levels are saved.)'),
+        group(null, [toggle('Show notifications', 'notificationsEnabled')])];
+    },
+    about: function () {
+      var d = el('div', 'about');
+      var img = el('img'); img.src = 'about.png'; img.alt = '';
+      d.append(img, el('h2', '', 'BreakBar for Windows'), el('p', '', 'Version ' + version),
+        el('p', '', 'A floating Pomodoro timer. MIT licence.'),
+        el('p', '', 'Inspired by TomatoBar; the Rest window idea comes from Flow.'));
+      return [d];
+    }
+  };
+
+  function render() {
+    var tabs = document.getElementById('tabs'); tabs.textContent = '';
+    TABS.forEach(function (t) {
+      var b = el('button', 'tab' + (tab === t[0] ? ' sel' : ''), t[1]);
+      b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(tab === t[0]));
+      b.onclick = function () { tab = t[0]; render(); };
+      tabs.appendChild(b);
+    });
+    var page = document.getElementById('page');
+    var keepScroll = page.scrollTop;
+    var focusLabel = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('aria-label');
+    page.textContent = '';
+    if (settings) PAGES[tab]().forEach(function (n) { page.appendChild(n); });
+    page.scrollTop = keepScroll;
+  }
+
+  // Sliders and typed boxes rebuild nothing while in use; other changes redraw the page.
+  tauri.event.listen('settings', function (e) {
+    settings = e.payload;
+    var a = document.activeElement;
+    if (!(a && (a.type === 'range' || a.classList.contains('num')))) render();
+  });
+  tauri.event.listen('show-tab', function (e) { tab = e.payload; render(); });
+
+  Promise.all([invoke('get_settings'), invoke('take_tab'), invoke('app_info')]).then(function (r) {
+    settings = r[0]; if (r[1]) tab = r[1]; version = r[2].version; render();
+  });
+})();
+</script>
+</body>
+</html>
