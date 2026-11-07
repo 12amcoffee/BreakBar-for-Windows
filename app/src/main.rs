@@ -252,8 +252,10 @@ fn update_settings(app: AppHandle, shared: State<Shared>, settings: TimerSetting
     clamped
 }
 
+/// Async on purpose: building a window inside a *sync* command deadlocks on Windows
+/// (the window opens blank and cannot be closed).
 #[tauri::command]
-fn open_settings(app: AppHandle, shared: State<Shared>, tab: Option<String>) -> Result<(), String> {
+async fn open_settings(app: AppHandle, shared: State<'_, Shared>, tab: Option<String>) -> Result<(), String> {
     open_settings_window(&app, &shared, tab)
 }
 
@@ -352,8 +354,12 @@ fn main() {
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "show" => show_widget(app),
                     "settings" => {
-                        let shared = app.state::<Shared>();
-                        let _ = open_settings_window(app, &shared, None);
+                        // Off the event-loop thread, for the same reason as the command above.
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let shared = app.state::<Shared>();
+                            let _ = open_settings_window(&app, &shared, None);
+                        });
                     }
                     "quit" => app.exit(0),
                     _ => {}

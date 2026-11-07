@@ -15,7 +15,7 @@ button { font: inherit; border: 0; cursor: pointer; color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--tomato); outline-offset: 1px; }
 
 /* Number box: looks like plain text until you click it */
-.num { width: 44px; height: 26px; border: 0; border-radius: 6px; background: var(--control); color: inherit;
+.num { width: 44px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: inherit;
   font: inherit; font-variant-numeric: tabular-nums; text-align: right; padding: 0 7px; }
 .num:hover { background: var(--hover); }
 .num:focus { background: #fff; outline: 2px solid var(--tomato); }
