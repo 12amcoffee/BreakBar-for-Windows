@@ -69,7 +69,7 @@
     var minus = el('button', 'step', '−'), plus = el('button', 'step', '+');
     minus.setAttribute('aria-label', 'Decrease ' + label); plus.setAttribute('aria-label', 'Increase ' + label);
     minus.onclick = function () { bump(-(step || 1)); }; plus.onclick = function () { bump(step || 1); };
-    row.append(input, el('span', 'unit', 'min'), minus, plus);
+    row.append(minus, input, el('span', 'unit', 'min'), plus);
     return row;
   }
   function count(label, key, range) {
