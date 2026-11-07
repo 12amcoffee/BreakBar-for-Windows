@@ -1,0 +1,20 @@
+[package]
+name = "breakbar-app"
+version = "2.0.0"
+edition = "2021"
+description = "BreakBar for Windows: floating Pomodoro timer widget"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+breakbar-core = { path = "../core" }
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+
+[features]
+# Embeds the page into the exe. Needed for a plain `cargo build --release`.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

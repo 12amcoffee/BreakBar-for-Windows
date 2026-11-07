@@ -1,14 +1,29 @@
-name: ci
-on: [push, pull_request]
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
 
 jobs:
-  test:
+  core:
+    name: core tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Unit tests (timer logic)
-        run: cargo test --workspace
+      - run: cargo test -p breakbar-core
+
+  windows-app:
+    name: Windows app build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo build --release -p breakbar-app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BreakBar-windows-exe
+          path: target/release/breakbar-app.exe
+          if-no-files-found: error
