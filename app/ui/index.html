@@ -15,7 +15,8 @@
     background: var(--card); border: 1px solid var(--line); border-radius: 20px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, .18); transition: opacity .25s ease, background .2s ease, color .2s ease; }
   .pill.glyphonly { padding: 0 12px; }
-  .pill svg { height: 16px; width: auto; fill: currentColor; flex: none; }
+  .pill svg { height: 18px; width: auto; flex: none; }
+  .pill svg.glyph { height: 16px; fill: currentColor; }
   .pill .t { font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .2px; }
   .pill.waiting { background: var(--tomato); color: #fff; border-color: transparent; }
   /* Faded when the mouse is away, solid when it is over the widget or the dropdown is open. */
@@ -92,17 +93,10 @@
   var invoke = tauri.core.invoke;
   var appWindow = tauri.window.getCurrentWindow();
 
-  var GLYPH = '<svg viewBox="0 0 28 16" aria-hidden="true"><rect x="1" y="5" width="17" height="6" rx="3"/><rect x="21" y="5" width="6" height="6" rx="3"/></svg>';
-  var ICONS = {
-    idle: GLYPH,
-    working: GLYPH,
-    paused: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>',
-    waitingToRest: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5"/></svg>',
-    snoozed: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2a6.5 6.5 0 1 0 3.5 11A5.5 5.5 0 0 1 10.5 2z"/></svg>',
-    shortRest: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h9v4a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V6zm9 1h1.5a1.5 1.5 0 0 1 0 3H11V7z"/></svg>',
-    longRest: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14C3 10 2 7.500 4 5.500 5.500 4 7.300 4.600 8 6c.7-1.400 2.500-2 4-.5 2 2 1 4.500-4 8.500z"/></svg>',
-    waitingToWork: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.500v11l9-5.500z"/></svg>'
-  };
+  var GLYPH = '<svg class="glyph" viewBox="0 0 28 16" aria-hidden="true"><rect x="1" y="5" width="17" height="6" rx="3"/><rect x="21" y="5" width="6" height="6" rx="3"/></svg>';
+  // Same icons as the Mac app's menu bar: hourglass while working, bell when waiting, zzz snoozed, cup / bed resting.
+  var ICON_NAMES = { working: 'hourglass', paused: 'pause', waitingToRest: 'bell', snoozed: 'zzz', shortRest: 'cup', longRest: 'bed', waitingToWork: 'bellBadge' };
+  function iconFor(name) { return ICON_NAMES[name] ? BB.svg(ICON_NAMES[name]) : GLYPH; }
   var INTERVALS = [
     { key: 'workMinutes', pill: 'Work', full: 'Work session' },
     { key: 'shortRestMinutes', pill: 'Short', full: 'Short rest' },
@@ -127,7 +121,7 @@
   // ---- drawing
   function render(v) {
     view = v;
-    $('glyph').innerHTML = ICONS[v.icon] || GLYPH;
+    $('glyph').innerHTML = iconFor(v.icon);
     var hasText = v.text !== null && v.text !== undefined;
     $('time').hidden = !hasText;
     $('time').textContent = hasText ? v.text : '';

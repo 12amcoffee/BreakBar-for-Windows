@@ -20,7 +20,7 @@
   .row:not(:last-child) { border-bottom: 1px solid var(--line); }
   .row .label { flex: 1; }
   .row .unit { color: var(--ink-soft); }
-  .row:has(+ .hint) { border-bottom: 0; }
+  .row.nob { border-bottom: 0; }
   .hint { padding: 4px 14px 12px; color: var(--ink-soft); font-size: 12.5px; }
   .row.off { opacity: .45; pointer-events: none; }
   select { font: inherit; color: inherit; background: var(--control); border: 0; border-radius: 7px; padding: 5px 8px; }
@@ -115,6 +115,8 @@
     var g = el('div', 'group');
     if (title) g.appendChild(el('h3', '', title));
     rows.forEach(function (r) { g.appendChild(r); });
+    // The row just above a hint gets no divider line: the hint belongs to it.
+    if (hint && rows.length) rows[rows.length - 1].classList.add('nob');
     if (hint) g.appendChild(el('div', 'hint', hint));
     return g;
   }
@@ -198,10 +200,12 @@
         input.type = 'radio'; input.name = 'style'; input.checked = settings.windowStyle === st[0];
         input.onchange = function () { save('windowStyle', st[0]); };
         lab.append(input, el('span', '', st[1]));
-        row.appendChild(lab);
+        var pv = el('button', 'keybox', 'Preview'); pv.style.minWidth = '80px';
+        pv.onclick = function () { invoke('preview_prompt', { style: st[0] }); };
+        row.append(lab, pv);
         return row;
       });
-      return [group('Window style', rows, 'Used for both the Rest and Start working windows. Esc or Close always dismisses a window. (They appear in a later update; your choice is saved.)')];
+      return [group('Window style', rows, 'Used for both the Rest and Start working windows. Esc or Close always dismisses a window.')];
     },
     sounds: function () {
       return [

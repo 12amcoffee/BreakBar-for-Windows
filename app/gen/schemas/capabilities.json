@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Permissions for the widget window","local":true,"windows":["main","settings"],"permissions":["core:default","core:window:allow-start-dragging"]}}
+{"default":{"identifier":"default","description":"Permissions for the widget window","local":true,"windows":["main","settings","prompt-*"],"permissions":["core:default","core:window:allow-start-dragging"]}}

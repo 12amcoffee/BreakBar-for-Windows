@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BreakBar</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  /* Palette A (light): cream cards. The full-screen overlay is a tomato screen with cream text. */
+  :root {
+    --bg: #FFF9F2; --text: #1F1A17; --soft: rgba(31, 26, 23, .62); --line: rgba(31, 26, 23, .13);
+    --control: rgba(31, 26, 23, .08); --hover: rgba(255, 201, 187, .6);
+    --primary: #E5432B; --primary-hover: #CC3A24; --primary-label: #FFF9F2;
+    --dot-off: rgba(31, 26, 23, .2); --dot-done: #E5432B; --icon: #E5432B;
+    --track: rgba(31, 26, 23, .08); --fill: #FFC9BB; --outline: none;
+  }
+  body.fullScreen {
+    --bg: #E5432B; --text: #FFF9F2; --soft: #FFF9F2; --line: rgba(255, 249, 242, .3);
+    --control: rgba(255, 249, 242, .16); --hover: rgba(255, 201, 187, .28);
+    --primary: #FFF9F2; --primary-hover: #fff; --primary-label: #1F1A17;
+    --dot-off: rgba(255, 249, 242, .4); --dot-done: #FFF9F2; --icon: #FFF9F2;
+    --track: rgba(255, 249, 242, .28); --fill: #FFC9BB; --outline: rgba(255, 249, 242, .5);
+  }
+  html, body { height: 100%; margin: 0; background: transparent; overflow: hidden; -webkit-user-select: none; user-select: none; }
+  body { color: var(--text); }
+  body.fullScreen { background: var(--bg); }
+
+  #card { position: absolute; display: flex; align-items: center; justify-content: center;
+    background: var(--bg); border: 1px solid var(--line); }
+  /* small: the window has 12 px of margin around the card for its shadow */
+  body.small #card { inset: 12px; border-radius: calc(var(--b) * 1.3); padding: calc(var(--b) * 1.7); box-shadow: 0 6px 22px rgba(0, 0, 0, .28); }
+  body.maximised #card { inset: 0; border-radius: calc(var(--b) * 1.3); padding: calc(var(--b) * 1.7); }
+  body.fullScreen #card { inset: 0; border: 0; border-radius: 0; }
+  body.banner #card { inset: 12px; border-radius: 14px; padding: 0 14px; box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+    justify-content: flex-start; animation: slide .25s ease-out; }
+  @keyframes slide { from { transform: translateY(-120%); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  #stack { display: flex; flex-direction: column; align-items: center; gap: calc(var(--b) * .9); font-size: var(--b); max-width: 100%; }
+  .icon { height: calc(var(--b) * var(--icon-em)); width: auto; color: var(--icon); }
+  .title { font-size: calc(var(--b) * var(--title-em)); font-weight: 600; }
+  .clock { font-size: calc(var(--b) * var(--clock-em)); font-weight: 300; font-family: "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .bar { height: calc(var(--b) * .35); border-radius: 99px; background: var(--track); overflow: hidden; width: calc(var(--b) * var(--bar-em)); }
+  .bar i { display: block; height: 100%; background: var(--fill); border-radius: 99px; transition: width 1s linear; }
+  .prog { display: flex; align-items: center; gap: calc(var(--b) * .7); font-size: calc(var(--b) * .95); color: var(--soft); }
+  .dots { display: flex; gap: calc(var(--b) * .45); }
+  .dot { width: calc(var(--b) * .7); height: calc(var(--b) * .7); border-radius: 50%; box-sizing: border-box; border: calc(var(--b) * .1) solid var(--dot-off); }
+  .dot.done { background: var(--dot-done); border-color: var(--dot-done); }
+  .dot.cur { border-color: var(--dot-done); }
+
+  .btns { display: flex; flex-direction: column; gap: calc(var(--bs) * .6); width: calc(var(--bs) * 24); max-width: 100%; font-size: var(--bs); }
+  .btns .row { display: flex; gap: calc(var(--bs) * .6); justify-content: center; flex-wrap: wrap; }
+  button.b { font: inherit; border: 0; cursor: pointer; border-radius: calc(var(--bs) * .6); padding: 0 calc(var(--bs) * 1.1);
+    min-height: calc(var(--bs) * 2.3); background: var(--control); color: var(--text); font-weight: 500; }
+  button.b:hover { background: var(--hover); }
+  body.fullScreen button.b { background: transparent; box-shadow: inset 0 0 0 max(1px, calc(var(--bs) * .08)) var(--outline); }
+  body.fullScreen button.b:hover { background: var(--hover); }
+  button.b.primary { background: var(--primary); color: var(--primary-label); font-weight: 600; min-height: calc(var(--bs) * 2.6); width: 100%; box-shadow: none; }
+  button.b.primary:hover { background: var(--primary-hover); }
+  .link { font: inherit; background: none; border: 0; cursor: pointer; color: var(--soft); font-size: calc(var(--b) * .85); }
+  .link:hover { text-decoration: underline; }
+  .hint { font-size: calc(var(--b) * .75); color: var(--soft); text-align: center; }
+  #closeFs { position: absolute; top: calc(var(--b) * 1.2); right: calc(var(--b) * 1.2); font: inherit; font-size: calc(var(--b) * .8); border: 0; cursor: pointer;
+    padding: calc(var(--b) * .35) calc(var(--b) * .7); border-radius: 99px; background: var(--control); color: var(--text); }
+
+  /* banner */
+  .banner-icon { height: 26px; width: auto; color: var(--icon); flex: none; }
+  .btext { display: flex; flex-direction: column; margin-left: 12px; min-width: 0; }
+  .btext b { font-size: 13px; font-weight: 600; }
+  .btext span { font-size: 12px; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .bspace { flex: 1; min-width: 8px; }
+  .bbtns { display: flex; gap: 6px; font-size: 12px; }
+  .bbtns button.b { min-height: 28px; width: auto; padding: 0 12px; font-size: 12px; }
+  .bclose { margin-left: 10px; background: none; border: 0; cursor: pointer; color: var(--soft); font-size: 14px; padding: 4px 6px; }
+</style>
+</head>
+<body class="small">
+<div id="card"></div>
+<script src="common.js"></script>
+<script>
+(function () {
+  var tauri = window.__TAURI__, invoke = tauri.core.invoke, win = tauri.window.getCurrentWindow();
+  var card = document.getElementById('card');
+  var payload = null, built = null, total = 1;
+
+  function icon(spec, cls) {
+    return BB.svg(spec.kind === 'work' ? 'hourglass' : (spec.longBreak ? 'bed' : 'cup'), cls);
+  }
+  function title(spec) { return spec.kind === 'rest' ? 'Rest' : spec.kind === 'resting' ? 'Resting' : 'Break is over'; }
+  function progressText(p) {
+    if (p.kind === 'session') return 'Session ' + p.current + ' of ' + p.of;
+    if (p.kind === 'done') return p.done + ' of ' + p.of + ' done' + (p.longBreakNext ? ' · long break next' : '');
+    if (p.kind === 'longBreak') return 'Long break';
+    return 'Long break after this session';
+  }
+  function dotsHtml(d) {
+    var h = '';
+    for (var i = 0; i < d.total; i++) h += '<span class="dot' + (i < d.done ? ' done' : (i === d.done && d.hasCurrent ? ' cur' : '')) + '"></span>';
+    return '<div class="dots">' + h + '</div>';
+  }
+  function clock(spec) {
+    var left = Math.max(0, Math.ceil((spec.endsAt || 0) - Date.now() / 1000));
+    var m = Math.floor(left / 60), s = left % 60;
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+  function act(ev) { invoke('send', { event: ev }); }
+  function hide() { invoke('hide_prompt'); }
+
+  // What changes the layout: style + spec shape. The clock and bar update in place.
+  function shapeKey() {
+    var s = payload.spec;
+    return [payload.style, s.kind, s.longBreak, s.snoozeMinutes, s.extendMinutes, s.canSkip, s.dots.done, s.dots.total, s.dots.hasCurrent, payload.preview].join('|');
+  }
+
+  function build() {
+    var style = payload.style, spec = payload.spec, preview = payload.preview;
+    document.body.className = style;
+    var w = window.innerWidth, h = window.innerHeight, base;
+    if (style === 'small') base = 13.5;
+    else if (style === 'maximised') base = Math.min(w, h) * 0.034;
+    else if (style === 'fullScreen') base = Math.min(w, h) * 0.025;
+    else base = 13;
+    var bs = style === 'maximised' ? 13.5 : base;
+    var r = document.documentElement.style;
+    r.setProperty('--b', base + 'px'); r.setProperty('--bs', bs + 'px');
+    var em = style === 'fullScreen' ? { i: 3.2, t: 3.8, c: 4.0, bar: 14 } : { i: 2.9, t: 2, c: 3.6, bar: 16 };
+    r.setProperty('--icon-em', em.i); r.setProperty('--title-em', em.t); r.setProperty('--clock-em', em.c); r.setProperty('--bar-em', em.bar);
+
+    var primary = spec.kind === 'rest' ? 'Start resting' : 'Start working';
+    var onPrimary = function () { if (preview) hide(); else act(spec.kind === 'rest' ? 'startRest' : 'startWork'); };
+    var onAct = function (ev) { return function () { if (preview) hide(); else act(ev); }; };
+
+    if (style === 'banner') { buildBanner(spec, primary, onPrimary, onAct); return; }
+
+    var html = '<div id="stack">' + icon(spec, 'icon') + '<div class="title">' + title(spec) + '</div>';
+    if (spec.kind === 'resting') html += '<div class="clock" id="clock"></div><div class="bar"><i id="barfill"></i></div>';
+    html += '<div class="prog">' + dotsHtml(spec.dots) + '<span>' + esc(progressText(spec.progress)) + '</span></div>';
+    html += '<div class="btns" id="btns"></div>';
+    if (style !== 'fullScreen' && spec.kind !== 'resting') html += '<button class="link" id="closeLink">' + (style === 'maximised' ? 'Close · Esc' : 'Close') + '</button>';
+    html += '</div>';
+    if (style === 'fullScreen') html += '<button id="closeFs">Close (Esc)</button>';
+    card.innerHTML = html;
+
+    var btns = document.getElementById('btns');
+    if (spec.kind !== 'resting') btns.appendChild(button(primary, 'b primary', onPrimary));
+    var row = document.createElement('div'); row.className = 'row';
+    if (spec.snoozeMinutes) row.appendChild(button('Snooze ' + spec.snoozeMinutes + ' min', 'b', onAct('snooze')));
+    if (spec.extendMinutes) row.appendChild(button('+' + spec.extendMinutes + ' min', 'b', onAct('extend')));
+    if (spec.canSkip) row.appendChild(button('Skip rest', 'b', onAct('skip')));
+    if (spec.kind === 'resting') row.appendChild(button('Hide', 'b', hide));
+    btns.appendChild(row);
+    if (style === 'maximised') {
+      var hint = document.createElement('div'); hint.className = 'hint';
+      hint.textContent = spec.kind === 'rest' ? 'Press Return to start resting' : spec.kind === 'work' ? 'Press Return to start working' : 'Press Esc to hide';
+      btns.appendChild(hint);
+    }
+    var cl = document.getElementById('closeLink'); if (cl) cl.onclick = hide;
+    var cf = document.getElementById('closeFs'); if (cf) cf.onclick = hide;
+    // Only the small window is dragged around; press on the card, not on a button.
+    card.onpointerdown = style === 'small' ? function (e) { if (e.button === 0 && !e.target.closest('button')) win.startDragging(); } : null;
+  }
+
+  function buildBanner(spec, primary, onPrimary, onAct) {
+    card.innerHTML = icon(spec, 'banner-icon') +
+      '<div class="btext"><b>' + title(spec) + '</b><span id="bsub"></span></div><div class="bspace"></div><div class="bbtns" id="bbtns"></div>' +
+      '<button class="bclose" id="bclose" aria-label="Close">✕</button>';
+    var b = document.getElementById('bbtns');
+    if (spec.kind !== 'resting') b.appendChild(button(primary, 'b primary', onPrimary));
+    if (spec.snoozeMinutes) b.appendChild(button('Snooze ' + spec.snoozeMinutes + ' min', 'b', onAct('snooze')));
+    if (spec.extendMinutes) b.appendChild(button('+' + spec.extendMinutes + ' min', 'b', onAct('extend')));
+    if (spec.kind === 'resting' && spec.canSkip) b.appendChild(button('Skip rest', 'b', onAct('skip')));
+    document.getElementById('bclose').onclick = hide;
+  }
+
+  function button(label, cls, fn) { var b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = fn; return b; }
+
+  function tickUi() {
+    if (!payload) return;
+    var spec = payload.spec;
+    var c = document.getElementById('clock'); if (c) c.textContent = clock(spec);
+    var f = document.getElementById('barfill');
+    if (f) {
+      var tot = Math.max(spec.total || 1, 1), left = Math.max(0, (spec.endsAt || 0) - Date.now() / 1000);
+      f.style.width = (Math.min(1, Math.max(0.03, 1 - left / tot)) * 100) + '%';
+    }
+    var sub = document.getElementById('bsub');
+    if (sub) sub.textContent = spec.kind === 'resting' ? clock(spec) + ' left' : progressText(spec.progress);
+  }
+
+  function poll() {
+    invoke('get_prompt').then(function (p) {
+      if (!p) return;                      // nothing to show: the app closes this window itself
+      payload = p;
+      var key = shapeKey();
+      if (key !== built) { built = key; build(); }
+      tickUi();
+    }).catch(function () {});
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (!payload) return;
+    var style = payload.style;
+    if (e.key === 'Escape' && (style === 'maximised' || style === 'fullScreen')) { e.preventDefault(); hide(); }
+    else if (e.key === 'Enter' && style === 'maximised' && payload.spec.kind !== 'resting' && e.target.tagName !== 'BUTTON') {
+      e.preventDefault();
+      if (payload.preview) hide(); else invoke('send', { event: payload.spec.kind === 'rest' ? 'startRest' : 'startWork' });
+    }
+  });
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  window.addEventListener('resize', function () { built = null; });
+  poll(); setInterval(poll, 250);
+})();
+</script>
+</body>
+</html>

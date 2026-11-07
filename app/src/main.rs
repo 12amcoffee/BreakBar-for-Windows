@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod audio;
+mod prompt;
 mod protocol;
 mod store;
 
@@ -36,6 +37,7 @@ struct Shared {
     config_dir: PathBuf,
     audio: Audio,
     prefs: Mutex<store::Prefs>,
+    prompt: Mutex<prompt::PromptState>,
 }
 
 impl Shared {
@@ -100,6 +102,22 @@ struct Progress {
     long_break_next: bool,
 }
 
+fn progress_of(m: &TimerMachine) -> Progress {
+    match m.session_progress() {
+        SessionProgress::Session { current, of } => Progress { kind: "session", current, done: 0, of, long_break_next: false },
+        SessionProgress::Done { done, of, long_break_next } => Progress { kind: "done", current: 0, done, of, long_break_next },
+        SessionProgress::LongBreak => Progress { kind: "longBreak", current: 0, done: 0, of: 0, long_break_next: false },
+        SessionProgress::LongBreakAfterThisSession => {
+            Progress { kind: "longBreakAfter", current: 0, done: 0, of: 0, long_break_next: false }
+        }
+    }
+}
+
+fn dots_of(m: &TimerMachine) -> Dots {
+    let d = m.dots();
+    Dots { done: d.done, has_current: d.has_current, total: d.total }
+}
+
 fn view_of(m: &TimerMachine, at: f64) -> View {
     let icon = match m.icon() {
         PillIcon::Idle => "idle",
@@ -113,14 +131,7 @@ fn view_of(m: &TimerMachine, at: f64) -> View {
     };
     let d = m.dots();
     let a = m.available();
-    let progress = match m.session_progress() {
-        SessionProgress::Session { current, of } => Progress { kind: "session", current, done: 0, of, long_break_next: false },
-        SessionProgress::Done { done, of, long_break_next } => Progress { kind: "done", current: 0, done, of, long_break_next },
-        SessionProgress::LongBreak => Progress { kind: "longBreak", current: 0, done: 0, of: 0, long_break_next: false },
-        SessionProgress::LongBreakAfterThisSession => {
-            Progress { kind: "longBreakAfter", current: 0, done: 0, of: 0, long_break_next: false }
-        }
-    };
+    let progress = progress_of(m);
     View {
         icon,
         text: m.pill_text(at),
@@ -469,6 +480,9 @@ fn main() {
             take_tab,
             app_info,
             preview_sound,
+            prompt::get_prompt,
+            prompt::hide_prompt,
+            prompt::preview_prompt,
             get_prefs,
             set_shortcut,
             get_autostart,
@@ -488,6 +502,7 @@ fn main() {
                 drag: Mutex::new(None),
                 pending_tab: Mutex::new(None),
                 audio: Audio::start(),
+                prompt: Mutex::new(prompt::PromptState::default()),
                 prefs: Mutex::new(store::load_prefs(&config_dir)),
                 config_dir,
             });
@@ -559,6 +574,7 @@ fn main() {
                     };
                     run_effects(&handle, &effects, &settings);
                     let _ = handle.emit("view", view);
+                    prompt::reconcile(&handle); // opens or closes the Rest / Start working window
                 }
             });
             Ok(())
