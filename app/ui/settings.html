@@ -198,10 +198,12 @@
         input.type = 'radio'; input.name = 'style'; input.checked = settings.windowStyle === st[0];
         input.onchange = function () { save('windowStyle', st[0]); };
         lab.append(input, el('span', '', st[1]));
-        row.appendChild(lab);
+        var pv = el('button', 'keybox', 'Preview'); pv.style.minWidth = '80px';
+        pv.onclick = function () { invoke('preview_prompt', { style: st[0] }); };
+        row.append(lab, pv);
         return row;
       });
-      return [group('Window style', rows, 'Used for both the Rest and Start working windows. Esc or Close always dismisses a window. (They appear in a later update; your choice is saved.)')];
+      return [group('Window style', rows, 'Used for both the Rest and Start working windows. Esc or Close always dismisses a window.')];
     },
     sounds: function () {
       return [

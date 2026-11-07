@@ -2,7 +2,7 @@
 
 A floating Pomodoro timer for Windows, the sibling of the [BreakBar menu bar app for Mac](https://github.com/12amcoffee/BreakBar).
 
-**Status: work in progress** (step 4 of 6). A working floating timer with settings, sounds, notifications, hotkeys, start at login and `breakbar://` commands; the Rest windows come next. Test builds are attached to each pull request's CI run (unsigned).
+**Status: work in progress** (step 5 of 6). A working floating timer with settings, sounds, notifications, hotkeys, start at login, `breakbar://` commands and the four Rest window styles; the installer and release come next. Test builds are attached to each pull request's CI run (unsigned).
 
 ## What is here
 
@@ -19,8 +19,8 @@ cargo test --workspace
 1. Timer logic (done)
 2. Floating widget shell (Tauri, always on top, tray icon, single instance) (done)
 3. Dropdown content and Settings (done)
-4. Sounds, notifications, hotkeys, start at login, `breakbar://` commands (this step)
-5. The four Rest window styles
+4. Sounds, notifications, hotkeys, start at login, `breakbar://` commands (done)
+5. The four Rest window styles (this step)
 6. Installer, release workflow, docs
 
 ## License
