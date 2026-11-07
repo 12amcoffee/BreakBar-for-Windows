@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BreakBar</title>
+<style>
+  :root {
+    --tomato: #E5432B;
+    --card: #FBF6EC;
+    --ink: #2B2A28;
+    --ink-soft: #7A756C;
+    --line: rgba(0, 0, 0, .10);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font: 14px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--ink);
+    -webkit-user-select: none; user-select: none; cursor: default; }
+  #root { height: 100%; padding: 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+  #root.up { flex-direction: column-reverse; }
+  #root.left { align-items: flex-end; }
+
+  .pill { height: 40px; min-width: 40px; padding: 0 14px; display: inline-flex; align-items: center; gap: 9px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .18); transition: opacity .25s ease, background .2s ease, color .2s ease; }
+  .pill.glyphonly { padding: 0 12px; }
+  .pill svg { height: 16px; width: auto; fill: currentColor; flex: none; }
+  .pill .t { font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .2px; }
+  .pill.waiting { background: var(--tomato); color: #fff; border-color: transparent; }
+  /* Faded when the mouse is away, solid when it is over the widget or the dropdown is open. */
+  .pill.faded { opacity: .55; }
+
+  .panel { width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .22); padding: 14px; display: none; flex: 1; min-height: 0; flex-direction: column; gap: 12px; }
+  .open .panel { display: flex; }
+  .state { font-weight: 600; }
+  .sub { color: var(--ink-soft); font-size: 12.5px; }
+  .dots { display: flex; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink-soft); }
+  .dot.done { background: var(--tomato); border-color: var(--tomato); }
+  .dot.cur { border-color: var(--tomato); }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 7px 13px; background: rgba(0, 0, 0, .07); color: var(--ink); cursor: pointer; }
+  button:hover { background: rgba(0, 0, 0, .12); }
+  button.primary { background: var(--tomato); color: #fff; }
+  button.primary:hover { background: #cf3a24; }
+  .note { color: var(--ink-soft); font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="pill glyphonly faded" id="pill"><span id="glyph"></span><span class="t" id="time" hidden></span></div>
+  <div class="panel" id="panel">
+    <div><div class="state" id="stateLabel">Not running</div><div class="sub" id="sessionLabel"></div></div>
+    <div class="dots" id="dots"></div>
+    <div class="btns" id="btns"></div>
+    <div class="note">Durations, sounds and the other settings arrive in the next step.</div>
+  </div>
+</div>
+<script>
+(function () {
+  var tauri = window.__TAURI__;
+  var invoke = tauri.core.invoke;
+  var appWindow = tauri.window.getCurrentWindow();
+
+  var GLYPH = '<svg viewBox="0 0 28 16" aria-hidden="true"><rect x="1" y="5" width="17" height="6" rx="3"/><rect x="21" y="5" width="6" height="6" rx="3"/></svg>';
+  var ICONS = {
+    idle: GLYPH,
+    working: GLYPH,
+    paused: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>',
+    waitingToRest: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5"/></svg>',
+    snoozed: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2a6.5 6.5 0 1 0 3.5 11A5.5 5.5 0 0 1 10.5 2z"/></svg>',
+    shortRest: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h9v4a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V6zm9 1h1.5a1.5 1.5 0 0 1 0 3H11V7z"/></svg>',
+    longRest: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14C3 10 2 7.500 4 5.500 5.500 4 7.300 4.600 8 6c.7-1.400 2.500-2 4-.5 2 2 1 4.500-4 8.500z"/></svg>',
+    waitingToWork: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.500v11l9-5.500z"/></svg>'
+  };
+  var LABELS = {
+    idle: 'Not running', working: 'Working', paused: 'Paused', waitingToRest: 'Time for a rest',
+    snoozed: 'Snoozed', shortRest: 'Resting', longRest: 'Long rest', waitingToWork: 'Ready to work'
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var root = $('root'), pill = $('pill'), panel = $('panel');
+  var expanded = false, hovering = false, view = null;
+
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; }
+
+  function render(v) {
+    view = v;
+    $('glyph').innerHTML = ICONS[v.icon] || GLYPH;
+    var hasText = v.text !== null && v.text !== undefined;
+    $('time').hidden = !hasText;
+    $('time').textContent = hasText ? v.text : '';
+    pill.classList.toggle('glyphonly', !hasText);
+    pill.classList.toggle('waiting', v.icon === 'waitingToRest' || v.icon === 'waitingToWork');
+    applyFade();
+
+    $('stateLabel').textContent = LABELS[v.icon] || '';
+    var dots = $('dots'); dots.textContent = '';
+    for (var i = 0; i < v.dots.total; i++) {
+      var d = el('span', 'dot');
+      if (i < v.dots.done) d.classList.add('done');
+      else if (i === v.dots.done && v.dots.hasCurrent) d.classList.add('cur');
+      dots.appendChild(d);
+    }
+    $('sessionLabel').textContent = v.dots.done + ' of ' + v.dots.total + ' sessions done';
+
+    var btns = $('btns'); btns.textContent = '';
+    function add(label, ev, primary) {
+      var b = el('button', primary ? 'primary' : '', label);
+      b.addEventListener('click', function () { invoke('send', { event: ev }); });
+      btns.appendChild(b);
+    }
+    var a = v.actions;
+    if (v.idle) add('Start working', 'start', true);
+    if (a.canStartRest) add('Start resting', 'startRest', true);
+    if (a.canStartWork) add('Start working', 'startWork', true);
+    if (a.canResume) add('Resume', 'resume', true);
+    if (a.canPause) add('Pause', 'pause');
+    if (a.canSnooze) add('Snooze', 'snooze');
+    if (a.canExtend) add('Extend', 'extend');
+    if (a.canSkip) add('Skip', 'skip');
+    if (!v.idle) add('Stop', 'stop');
+  }
+
+  function applyFade() {
+    // Solid while the dropdown is open, while the mouse is over the widget, and while it waits for you.
+    var waiting = view && (view.icon === 'waitingToRest' || view.icon === 'waitingToWork');
+    pill.classList.toggle('faded', !(expanded || hovering || waiting));
+  }
+
+  function setExpanded(next) {
+    if (next === expanded) return;
+    expanded = next;
+    if (next) {
+      invoke('set_expanded', { expanded: true }).then(function (f) {
+        root.classList.toggle('up', f.up);
+        root.classList.toggle('left', f.left);
+        root.classList.add('open');
+        applyFade();
+      });
+    } else {
+      root.classList.remove('open', 'up', 'left');
+      invoke('set_expanded', { expanded: false });
+      applyFade();
+    }
+  }
+
+  // Click toggles the dropdown; moving more than 4 px turns the press into a drag. The window is
+  // moved by the Rust side to follow the cursor from the moment of the press (no trailing).
+  var down = null, dragging = false, queued = false;
+  pill.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0) return;
+    down = { x: e.screenX, y: e.screenY };
+    dragging = false;
+    try { pill.setPointerCapture(e.pointerId); } catch (_) {}
+    invoke('drag_begin');
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!down) return;
+    if (!dragging && (Math.abs(e.screenX - down.x) > 4 || Math.abs(e.screenY - down.y) > 4)) dragging = true;
+    if (dragging && !queued) {
+      queued = true;
+      requestAnimationFrame(function () { queued = false; invoke('drag_move'); });
+    }
+  });
+  function release() {
+    if (!down) return;
+    var wasDrag = dragging;
+    down = null; dragging = false;
+    if (!wasDrag) setExpanded(!expanded);
+  }
+  window.addEventListener('pointerup', release);
+  window.addEventListener('pointercancel', function () { down = null; dragging = false; });
+
+  document.addEventListener('mouseenter', function () { hovering = true; applyFade(); });
+  document.addEventListener('mouseleave', function () { hovering = false; applyFade(); });
+  // Click away collapses (the widget loses focus).
+  window.addEventListener('blur', function () { setExpanded(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setExpanded(false); });
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  tauri.event.listen('view', function (e) { render(e.payload); });
+  invoke('get_view').then(render);
+})();
+</script>
+</body>
+</html>
