@@ -23,5 +23,22 @@
       focused: function () { return document.activeElement === input; }
     };
   }
-  window.BB = { numberBox: numberBox };
+  /* Icons drawn like the Mac app's SF Symbols (bell, bell.badge, zzz, cup, bed, hourglass, pause circle).
+     All on a 24 x 24 box and centred in it. Filled shapes use the text colour; strokes use currentColor. */
+  var S = 'fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"';
+  var BELL = '<path d="M12 2.8a1.6 1.6 0 0 1 1.6 1.6v.45A6.2 6.2 0 0 1 18.2 10.8v3l1.7 2.6a1 1 0 0 1-.85 1.55H4.95a1 1 0 0 1-.85-1.55l1.7-2.6v-3a6.2 6.2 0 0 1 4.6-5.95V4.4A1.6 1.6 0 0 1 12 2.8z"/><path d="M9.6 19.4h4.8a2.4 2.4 0 0 1-4.8 0z"/>';
+  var ICONS = {
+    bell: BELL,
+    bellBadge: '<g transform="translate(-1.5 1) scale(.9)">' + BELL + '</g><circle cx="18.2" cy="5.8" r="3.3"/>',
+    zzz: '<g ' + S + ' stroke-width="2.2"><path d="M4 9.5h7L4 18h7"/><path d="M13.5 4h4.8l-4.8 5.8h4.8"/><path d="M19 13h2.6L19 16.2h2.6" stroke-width="1.8"/></g>',
+    cup: '<path d="M3.5 6h11.5v4.6a5.75 5.75 0 0 1-11.5 0V6z"/><path ' + S + ' stroke-width="1.9" d="M15 7.6h1.7a2.4 2.4 0 0 1 0 4.8h-2"/><rect x="2" y="17.6" width="16.5" height="1.9" rx=".95"/>',
+    bed: '<rect x="2.5" y="5.5" width="2" height="13.5" rx="1"/><rect x="19.5" y="11.5" width="2" height="7.5" rx="1"/><rect x="2.5" y="14.5" width="19" height="2.4" rx="1"/><rect x="5.8" y="10.4" width="14.2" height="3" rx="1.2"/><rect x="6.2" y="6.4" width="5.2" height="3" rx="1.5"/><rect x="12.4" y="6.4" width="5.2" height="3" rx="1.5"/>',
+    hourglass: '<path d="M6.5 3h11v3.5c0 2.2-1.8 3.7-3.2 5.5 1.4 1.8 3.2 3.3 3.2 5.5V21h-11v-3.5c0-2.2 1.8-3.7 3.2-5.5C8.3 10.2 6.5 8.7 6.5 6.5V3z"/>',
+    pause: '<path fill-rule="evenodd" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19zM9.2 8.2h1.9v7.6H9.2zM12.9 8.2h1.9v7.6h-1.9z"/>'
+  };
+  /** An <svg> string for a named icon. */
+  function svg(name, cls) {
+    return '<svg class="' + (cls || '') + '" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' + ICONS[name] + '</svg>';
+  }
+  window.BB = { numberBox: numberBox, svg: svg };
 })();

@@ -36,7 +36,7 @@
   @keyframes slide { from { transform: translateY(-120%); opacity: 0; } to { transform: none; opacity: 1; } }
 
   #stack { display: flex; flex-direction: column; align-items: center; gap: calc(var(--b) * .9); font-size: var(--b); max-width: 100%; }
-  .icon { height: calc(var(--b) * var(--icon-em)); width: auto; stroke: var(--icon); fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  .icon { height: calc(var(--b) * var(--icon-em)); width: auto; color: var(--icon); }
   .title { font-size: calc(var(--b) * var(--title-em)); font-weight: 600; }
   .clock { font-size: calc(var(--b) * var(--clock-em)); font-weight: 300; font-family: "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
   .bar { height: calc(var(--b) * .35); border-radius: 99px; background: var(--track); overflow: hidden; width: calc(var(--b) * var(--bar-em)); }
@@ -58,12 +58,12 @@
   button.b.primary:hover { background: var(--primary-hover); }
   .link { font: inherit; background: none; border: 0; cursor: pointer; color: var(--soft); font-size: calc(var(--b) * .85); }
   .link:hover { text-decoration: underline; }
-  .hint { font-size: calc(var(--b) * .75); color: var(--soft); }
+  .hint { font-size: calc(var(--b) * .75); color: var(--soft); text-align: center; }
   #closeFs { position: absolute; top: calc(var(--b) * 1.2); right: calc(var(--b) * 1.2); font: inherit; font-size: calc(var(--b) * .8); border: 0; cursor: pointer;
     padding: calc(var(--b) * .35) calc(var(--b) * .7); border-radius: 99px; background: var(--control); color: var(--text); }
 
   /* banner */
-  .banner-icon { height: 24px; width: auto; stroke: var(--icon); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .banner-icon { height: 26px; width: auto; color: var(--icon); flex: none; }
   .btext { display: flex; flex-direction: column; margin-left: 12px; min-width: 0; }
   .btext b { font-size: 13px; font-weight: 600; }
   .btext span { font-size: 12px; color: var(--soft); font-variant-numeric: tabular-nums; }
@@ -75,20 +75,15 @@
 </head>
 <body class="small">
 <div id="card"></div>
+<script src="common.js"></script>
 <script>
 (function () {
   var tauri = window.__TAURI__, invoke = tauri.core.invoke, win = tauri.window.getCurrentWindow();
   var card = document.getElementById('card');
   var payload = null, built = null, total = 1;
 
-  var SVG = {
-    cup: '<path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9zM17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 3v2M12 3v2"/>',
-    bed: '<path d="M3 18V6M3 14h18v4M21 14v-2.500a3 3 0 0 0-3-3h-7v5.500M7 12.500a1.500 1.500 0 1 0 0-.1"/>',
-    hourglass: '<path d="M6 3h12M6 21h12M7 3c0 6 5 7 5 9s-5 3-5 9M17 3c0 6-5 7-5 9s5 3 5 9"/>'
-  };
   function icon(spec, cls) {
-    var g = spec.kind === 'work' ? SVG.hourglass : (spec.longBreak ? SVG.bed : SVG.cup);
-    return '<svg class="' + cls + '" viewBox="0 0 24 24" aria-hidden="true">' + g + '</svg>';
+    return BB.svg(spec.kind === 'work' ? 'hourglass' : (spec.longBreak ? 'bed' : 'cup'), cls);
   }
   function title(spec) { return spec.kind === 'rest' ? 'Rest' : spec.kind === 'resting' ? 'Resting' : 'Break is over'; }
   function progressText(p) {
