@@ -344,7 +344,7 @@ fn main() {
             // Tray icon: static, lives in the overflow area unless the user pins it.
             let show = MenuItem::with_id(app, "show", "Show BreakBar", true, None::<&str>)?;
             let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Close", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &settings, &quit])?;
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().cloned().ok_or("missing app icon")?)
