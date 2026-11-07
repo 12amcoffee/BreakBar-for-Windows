@@ -1,0 +1,12 @@
+[package]
+name = "breakbar-core"
+version = "2.0.0"
+edition = "2021"
+description = "BreakBar's timer logic: settings, state machine and display helpers. No UI, no clocks."
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
