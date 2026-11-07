@@ -29,6 +29,23 @@ fn write<T: Serialize>(dir: &Path, name: &str, value: &T) {
     }
 }
 
+/// App-level choices that are not timer settings (the Mac app keeps its hotkeys apart too).
+#[derive(Serialize, Deserialize, Default, Clone, PartialEq, Debug)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Prefs {
+    /// e.g. "Ctrl+Alt+B"
+    pub start_stop_shortcut: Option<String>,
+    pub answer_shortcut: Option<String>,
+}
+
+pub fn load_prefs(dir: &Path) -> Prefs {
+    read(&dir.join("prefs.json")).unwrap_or_default()
+}
+
+pub fn save_prefs(dir: &Path, p: &Prefs) {
+    write(dir, "prefs.json", p);
+}
+
 pub fn load_settings(dir: &Path) -> TimerSettings {
     read::<TimerSettings>(&dir.join("settings.json")).unwrap_or_default().clamped()
 }
@@ -73,6 +90,16 @@ mod tests {
         fs::write(d.join("state.json"), "").unwrap();
         assert_eq!(load_settings(&d), TimerSettings::default());
         assert_eq!(load_state(&d), SavedState::default());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn prefs_round_trip() {
+        let d = temp("prefs");
+        assert_eq!(load_prefs(&d), Prefs::default());
+        let p = Prefs { start_stop_shortcut: Some("Ctrl+Alt+B".into()), answer_shortcut: None };
+        save_prefs(&d, &p);
+        assert_eq!(load_prefs(&d), p);
         let _ = fs::remove_dir_all(&d);
     }
 
