@@ -1,6 +1,6 @@
 [package]
 name = "breakbar-core"
-version = "2.0.0"
+version = "0.1.0"
 edition = "2021"
 description = "BreakBar's timer logic: settings, state machine and display helpers. No UI, no clocks."
 license = "MIT"

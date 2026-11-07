@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BreakBar for Windows</title>
+<meta name="description" content="A small floating Pomodoro timer for Windows, with a Rest window that asks you to take a break.">
+<style>
+  :root { --tomato: #E5432B; --tomato-dark: #CC3A24; --cream: #FFF9F2; --ink: #1F1A17; --soft: rgba(31, 26, 23, .62); --line: rgba(31, 26, 23, .13); }
+  @media (prefers-color-scheme: dark) { :root { --cream: #1F1A17; --ink: #F3EDE7; --soft: rgba(243, 237, 231, .65); --line: rgba(255, 249, 242, .16); } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--cream); color: var(--ink); font: 17px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 56px 0 28px; text-align: center; }
+  .badge { display: inline-block; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; color: var(--tomato); border: 1px solid var(--tomato); border-radius: 99px; padding: 2px 12px; }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.1; margin: 16px 0 10px; }
+  .lead { font-size: 20px; color: var(--soft); max-width: 600px; margin: 0 auto 26px; }
+  .btn { display: inline-block; background: var(--tomato); color: #fff; text-decoration: none; font-weight: 600; padding: 12px 24px; border-radius: 12px; margin: 4px; }
+  .btn:hover { background: var(--tomato-dark); }
+  .btn.quiet { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+  .shots { display: flex; gap: 20px; justify-content: center; align-items: flex-start; flex-wrap: wrap; padding: 24px 0; }
+  .shots img { max-width: 100%; height: auto; }
+  section { padding: 22px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 24px; margin: 0 0 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+  .card h3 { margin: 0 0 4px; font-size: 17px; }
+  .card p { margin: 0; color: var(--soft); font-size: 15.5px; }
+  .styles img { width: 100%; border-radius: 10px; border: 1px solid var(--line); }
+  .styles { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  code { background: rgba(127, 127, 127, .15); padding: 1px 6px; border-radius: 5px; font-size: 15px; }
+  footer { padding: 26px 0 50px; color: var(--soft); font-size: 15px; text-align: center; }
+  a { color: var(--tomato); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="badge">v0.1.0 pre-release</span>
+    <h1>BreakBar for Windows</h1>
+    <p class="lead">A small floating Pomodoro timer. When a work session ends, a Rest window asks you to take a break.</p>
+    <a class="btn" href="https://github.com/12amcoffee/BreakBar-for-Windows/releases">Download for Windows</a>
+    <a class="btn quiet" href="https://github.com/12amcoffee/BreakBar">Mac version</a>
+  </header>
+
+  <div class="shots">
+    <img src="images/widget.png" alt="The BreakBar widget with its dropdown open" width="280">
+    <img src="images/rest-small.png" alt="The Rest window" width="350">
+  </div>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="grid">
+      <div class="card"><h3>A pill that floats</h3><p>It sits above your other windows, not on the taskbar. Click it for the dropdown, drag it anywhere, and it fades when you are not using it.</p></div>
+      <div class="card"><h3>Work, then rest</h3><p>45 minutes of work, then 10 minutes of rest, with a longer 20 minute rest after every fourth session. Change any of it by typing a number.</p></div>
+      <div class="card"><h3>A Rest window you notice</h3><p>Start resting, snooze or skip. Then a countdown, and a Start working window when the break is over.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Four window styles</h2>
+    <p style="color:var(--soft);margin-top:0">Small floating window, maximised window, full-screen overlay (every display) or a notification-style banner. Settings has a Preview for each.</p>
+    <div class="styles">
+      <img src="images/rest-fullscreen.png" alt="The full-screen overlay">
+      <img src="images/settings.png" alt="The Settings window" style="max-width:340px;justify-self:center">
+    </div>
+  </section>
+
+  <section>
+    <h2>Also</h2>
+    <div class="grid">
+      <div class="card"><h3>Sounds and notifications</h3><p>Windup, ding and ticking with their own volumes, and Windows toasts.</p></div>
+      <div class="card"><h3>Shortcuts and commands</h3><p>Global hotkeys, and <code>breakbar://start</code>, <code>--toggle</code> and friends for other programs.</p></div>
+      <div class="card"><h3>Private</h3><p>Nothing leaves your PC. Settings are a small JSON file in your user folder.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Install</h2>
+    <p>Download <code>BreakBar-Setup.exe</code> (installs for your user, no administrator password) or the portable <code>BreakBar-windows-x64.zip</code>.</p>
+    <p>BreakBar is not code-signed, so Windows SmartScreen warns the first time. Click <b>More info</b>, then <b>Run anyway</b>. Needs Windows 10 or 11, 64-bit.</p>
+  </section>
+
+  <footer>
+    MIT licence. <a href="https://github.com/12amcoffee/BreakBar-for-Windows">Source on GitHub</a>.
+    Inspired by TomatoBar; the Rest window idea comes from Flow.
+  </footer>
+</div>
+</body>
+</html>

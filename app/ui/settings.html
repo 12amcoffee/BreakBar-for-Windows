@@ -227,7 +227,7 @@
     about: function () {
       var d = el('div', 'about');
       var img = el('img'); img.src = 'about.png'; img.alt = '';
-      d.append(img, el('h2', '', 'BreakBar for Windows'), el('p', '', 'Version ' + version),
+      d.append(img, el('h2', '', 'BreakBar for Windows'), el('p', '', 'v' + version + (/^0\./.test(version) ? ' pre-release' : '')),
         el('p', '', 'A floating Pomodoro timer. MIT licence.'),
         el('p', '', 'Inspired by TomatoBar; the Rest window idea comes from Flow.'));
       return [d];

@@ -76,7 +76,9 @@ jobs:
             # You already created this release on the website: keep your title and notes, add the files.
             gh release upload "$GITHUB_REF_NAME" "${FILES[@]}" --clobber
           else
-            FLAGS=""; [[ "$VERSION" == *-* ]] && FLAGS="--prerelease"
+            # Versions starting with 0 (and any with a suffix such as -beta) are pre-releases.
+            FLAGS=""; TITLE="BreakBar for Windows v$VERSION"
+            if [[ "$VERSION" == 0.* || "$VERSION" == *-* ]]; then FLAGS="--prerelease"; TITLE="$TITLE pre-release"; fi
             gh release create "$GITHUB_REF_NAME" "${FILES[@]}" \
-              --title "BreakBar for Windows $VERSION" --notes-file notes.md --generate-notes $FLAGS
+              --title "$TITLE" --notes-file notes.md --generate-notes $FLAGS
           fi
