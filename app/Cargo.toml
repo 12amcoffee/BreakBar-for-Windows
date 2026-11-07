@@ -5,6 +5,11 @@ edition = "2021"
 description = "BreakBar for Windows: floating Pomodoro timer widget"
 license = "MIT"
 
+# The program is called BreakBar.exe (not breakbar-app.exe).
+[[bin]]
+name = "BreakBar"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
