@@ -20,7 +20,8 @@
   .row:not(:last-child) { border-bottom: 1px solid var(--line); }
   .row .label { flex: 1; }
   .row .unit { color: var(--ink-soft); }
-  .hint { padding: 0 14px 10px; color: var(--ink-soft); font-size: 12.5px; }
+  .row:has(+ .hint) { border-bottom: 0; }
+  .hint { padding: 4px 14px 12px; color: var(--ink-soft); font-size: 12.5px; }
   .row.off { opacity: .45; pointer-events: none; }
   select { font: inherit; color: inherit; background: var(--control); border: 0; border-radius: 7px; padding: 5px 8px; }
   input[type=range] { width: 200px; accent-color: var(--tomato); }
@@ -35,6 +36,10 @@
   /* Radio rows */
   .radio { display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer; }
   .radio input { accent-color: var(--tomato); margin: 0; width: 16px; height: 16px; }
+  .keybox { min-width: 130px; padding: 5px 10px; border-radius: 7px; background: var(--control); text-align: center; }
+  .keybox:hover { background: var(--hover); }
+  .keybox.rec { background: #fff; outline: 2px solid var(--tomato); }
+  .err { color: var(--tomato); font-size: 12px; }
   .about { text-align: center; padding: 30px 10px; }
   .about img { width: 72px; height: 72px; }
   .about h2 { margin: 10px 0 2px; }
@@ -48,8 +53,8 @@
 <script>
 (function () {
   var tauri = window.__TAURI__, invoke = tauri.core.invoke;
-  var TABS = [['intervals', 'Intervals'], ['breaks', 'Breaks'], ['windows', 'Windows'], ['sounds', 'Sounds'], ['about', 'About']];
-  var settings = null, tab = 'intervals', version = '';
+  var TABS = [['intervals', 'Intervals'], ['breaks', 'Breaks'], ['windows', 'Windows'], ['sounds', 'Sounds'], ['general', 'General'], ['about', 'About']];
+  var settings = null, tab = 'intervals', version = '', prefs = {}, autostart = false;
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
 
@@ -95,11 +100,14 @@
     row.appendChild(sel);
     return row;
   }
+  var PREVIEW = { windupVolume: 'windup', dingVolume: 'ding', tickingVolume: 'ticking' };
   function slider(label, key) {
     var row = el('div', 'row'); row.appendChild(el('span', 'label', label));
     var r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.01; r.value = settings[key];
     r.setAttribute('aria-label', label);
     r.oninput = function () { save(key, parseFloat(r.value)); };
+    // Play the sound when the slider is let go, so you hear the level you chose.
+    r.onchange = function () { setTimeout(function () { invoke('preview_sound', { name: PREVIEW[key] }); }, 60); };
     row.appendChild(r);
     return row;
   }
@@ -109,6 +117,45 @@
     rows.forEach(function (r) { g.appendChild(r); });
     if (hint) g.appendChild(el('div', 'hint', hint));
     return g;
+  }
+
+  /** A shortcut box: click, press the keys, done. Backspace clears, Esc cancels. */
+  function accelFromEvent(e) {
+    var k = e.code, key;
+    if (/^Key[A-Z]$/.test(k)) key = k.slice(3);
+    else if (/^Digit[0-9]$/.test(k)) key = k.slice(5);
+    else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(k)) key = k;
+    else if (['Space', 'Enter', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Insert',
+              'Minus', 'Equal', 'Comma', 'Period', 'Slash', 'Semicolon', 'Quote', 'Backquote', 'BracketLeft', 'BracketRight', 'Backslash'].indexOf(k) >= 0) key = k;
+    else return null;
+    var mods = [];
+    if (e.ctrlKey) mods.push('Ctrl'); if (e.altKey) mods.push('Alt'); if (e.shiftKey) mods.push('Shift'); if (e.metaKey) mods.push('Super');
+    if (!mods.length && !/^F\d+$/.test(key)) return null;     // a plain letter would break typing everywhere
+    return mods.concat(key).join('+');
+  }
+  function shortcutRow(label, which, field) {
+    var row = el('div', 'row'); row.appendChild(el('span', 'label', label));
+    var btn = el('button', 'keybox', prefs[field] || 'Click to record');
+    var msg = el('span', 'err');
+    var recording = false;
+    function stop() { recording = false; btn.classList.remove('rec'); btn.textContent = prefs[field] || 'Click to record'; }
+    function apply(acc) {
+      invoke('set_shortcut', { which: which, accelerator: acc }).then(function (p) { prefs = p; msg.textContent = ''; stop(); })
+        .catch(function (err) { msg.textContent = String(err); stop(); });
+    }
+    btn.onclick = function () { recording = true; btn.classList.add('rec'); btn.textContent = 'Press the keys\u2026'; msg.textContent = ''; btn.focus(); };
+    btn.onblur = stop;
+    btn.onkeydown = function (e) {
+      if (!recording) return;
+      e.preventDefault(); e.stopPropagation();
+      if (['Control', 'Alt', 'Shift', 'Meta'].indexOf(e.key) >= 0) return;
+      if (e.key === 'Escape') { stop(); return; }
+      if (e.key === 'Backspace' || e.key === 'Delete') { apply(null); return; }
+      var acc = accelFromEvent(e);
+      if (acc) apply(acc); else msg.textContent = 'Include Ctrl, Alt, Shift or Win';
+    };
+    row.append(msg, btn);
+    return row;
   }
 
   // ---- tabs
@@ -159,8 +206,19 @@
     sounds: function () {
       return [
         group(null, [slider('Windup', 'windupVolume'), slider('Ding', 'dingVolume'), slider('Ticking', 'tickingVolume')],
-          'Zero turns a sound off. (Sound playback arrives in a later update; your levels are saved.)'),
+          'Let go of a slider to hear the sound. Zero turns it off.'),
         group(null, [toggle('Show notifications', 'notificationsEnabled')])];
+    },
+    general: function () {
+      var launch = toggle('Launch at login', 'launchAtLoginPlaceholder');
+      var input = launch.querySelector('input'); input.checked = autostart;
+      input.onchange = function () { invoke('set_autostart', { enabled: input.checked }).then(function (v) { autostart = v; input.checked = v; }); };
+      return [
+        group(null, [launch]),
+        group('Shortcuts', [shortcutRow('Start / stop shortcut', 'startStop', 'startStopShortcut'),
+                            shortcutRow('Answer window shortcut', 'answer', 'answerShortcut')],
+          'The answer shortcut presses "Start resting" or "Start working" for you.'),
+        group('Commands', [], 'Other programs can control BreakBar with links such as breakbar://start, breakbar://stop, breakbar://toggle, breakbar://startRest, breakbar://startWork, breakbar://snooze, breakbar://skip, breakbar://extend, breakbar://pause, breakbar://resume and breakbar://resetSet. Command-line flags work too, for example BreakBar.exe --toggle.')];
     },
     about: function () {
       var d = el('div', 'about');
@@ -196,8 +254,8 @@
   });
   tauri.event.listen('show-tab', function (e) { tab = e.payload; render(); });
 
-  Promise.all([invoke('get_settings'), invoke('take_tab'), invoke('app_info')]).then(function (r) {
-    settings = r[0]; if (r[1]) tab = r[1]; version = r[2].version; render();
+  Promise.all([invoke('get_settings'), invoke('take_tab'), invoke('app_info'), invoke('get_prefs'), invoke('get_autostart')]).then(function (r) {
+    settings = r[0]; if (r[1]) tab = r[1]; version = r[2].version; prefs = r[3]; autostart = r[4]; render();
   });
 })();
 </script>

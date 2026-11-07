@@ -1,15 +1,23 @@
 // No console window in release builds on Windows.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod audio;
+mod protocol;
 mod store;
 
-use breakbar_core::{PillIcon, SessionProgress, TimerEvent, TimerMachine, TimerSettings, TimerState};
+use audio::{Audio, Sound};
+use breakbar_core::{
+    PillIcon, RestKind, SessionProgress, TimerEffect, TimerEvent, TimerMachine, TimerSettings, TimerState, UrlCommand,
+};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_notification::NotificationExt;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 /// Logical size of the widget window when it is just the pill, and the width of the dropdown.
@@ -26,6 +34,8 @@ struct Shared {
     /// The Settings tab to show when its window opens.
     pending_tab: Mutex<Option<String>>,
     config_dir: PathBuf,
+    audio: Audio,
+    prefs: Mutex<store::Prefs>,
 }
 
 impl Shared {
@@ -136,34 +146,75 @@ fn get_view(shared: State<Shared>) -> View {
     view_of(&shared.machine.lock().unwrap(), now())
 }
 
-#[tauri::command]
-fn send(app: AppHandle, shared: State<Shared>, event: String) -> View {
+/// Feeds one event to the timer, then does what it asks (sounds, notifications), saves, and tells the page.
+fn dispatch(app: &AppHandle, event: TimerEvent) -> View {
+    let shared = app.state::<Shared>();
     let at = now();
-    let view = {
+    let (effects, view, settings) = {
         let mut m = shared.machine.lock().unwrap();
-        let ev = match event.as_str() {
-            "toggle" => {
-                if m.state() == TimerState::Idle { TimerEvent::Start } else { TimerEvent::Stop }
-            }
-            "start" => TimerEvent::Start,
-            "stop" => TimerEvent::Stop,
-            "startRest" => TimerEvent::StartRest,
-            "startWork" => TimerEvent::StartWork,
-            "snooze" => TimerEvent::Snooze,
-            "skip" => TimerEvent::Skip,
-            "extend" => TimerEvent::Extend,
-            "pause" => TimerEvent::Pause,
-            "resume" => TimerEvent::Resume,
-            "resetSet" => TimerEvent::ResetSet,
-            _ => return view_of(&m, at),
-        };
-        // Sounds and notifications (the returned effects) arrive in step 4.
-        let _effects = m.handle(ev, at);
+        let effects = m.handle(event, at);
         shared.save_state(&m);
-        view_of(&m, at)
+        (effects, view_of(&m, at), m.settings.clone())
     };
+    run_effects(app, &effects, &settings);
     let _ = app.emit("view", view.clone());
     view
+}
+
+/// `breakbar://` commands, flags and the "toggle" button all come through here.
+fn run_command(app: &AppHandle, cmd: UrlCommand) -> View {
+    let event = match cmd {
+        UrlCommand::Event(e) => e,
+        UrlCommand::Toggle => {
+            let idle = app.state::<Shared>().machine.lock().unwrap().state() == TimerState::Idle;
+            if idle { TimerEvent::Start } else { TimerEvent::Stop }
+        }
+    };
+    dispatch(app, event)
+}
+
+/// The "answer window" shortcut: presses Start resting or Start working for you.
+fn answer_prompt(app: &AppHandle) {
+    let a = app.state::<Shared>().machine.lock().unwrap().available();
+    if a.can_start_rest {
+        dispatch(app, TimerEvent::StartRest);
+    } else if a.can_start_work {
+        dispatch(app, TimerEvent::StartWork);
+    }
+}
+
+fn run_effects(app: &AppHandle, effects: &[TimerEffect], s: &TimerSettings) {
+    let shared = app.state::<Shared>();
+    for fx in effects {
+        match fx {
+            TimerEffect::PlayWindup => shared.audio.play(Sound::Windup, s.windup_volume),
+            TimerEffect::PlayDing => shared.audio.play(Sound::Ding, s.ding_volume),
+            TimerEffect::StartTicking => shared.audio.ticking(Some(s.ticking_volume)),
+            TimerEffect::StopTicking => shared.audio.ticking(None),
+            TimerEffect::NotifyRestStarted(kind) => {
+                let body = match kind {
+                    RestKind::Short => "It's time for a short break!",
+                    RestKind::Long => "It's time for a long break!",
+                };
+                notify(app, s, "Time's up", body);
+            }
+            TimerEffect::NotifyRestEnded => notify(app, s, "Break is over", "Keep up the good work!"),
+        }
+    }
+}
+
+fn notify(app: &AppHandle, s: &TimerSettings, title: &str, body: &str) {
+    if s.notifications_enabled {
+        let _ = app.notification().builder().title(title).body(body).show();
+    }
+}
+
+#[tauri::command]
+fn send(app: AppHandle, shared: State<Shared>, event: String) -> View {
+    match UrlCommand::from_host(&event) {
+        Some(cmd) => run_command(&app, cmd),
+        None => view_of(&shared.machine.lock().unwrap(), now()),
+    }
 }
 
 #[derive(Serialize)]
@@ -244,6 +295,9 @@ fn update_settings(app: AppHandle, shared: State<Shared>, settings: TimerSetting
     let view = {
         let mut m = shared.machine.lock().unwrap();
         m.settings = clamped.clone();
+        if matches!(m.state(), TimerState::Working { .. }) {
+            shared.audio.ticking(Some(clamped.ticking_volume)); // a slider moved while ticking
+        }
         view_of(&m, now())
     };
     store::save_settings(&shared.config_dir, &clamped);
@@ -296,6 +350,66 @@ fn app_info() -> AppInfo {
     AppInfo { version: env!("CARGO_PKG_VERSION") }
 }
 
+/// Plays a sound at its current level (for the sliders in Settings).
+#[tauri::command]
+fn preview_sound(shared: State<Shared>, name: String) {
+    let Some(sound) = Sound::from_name(&name) else { return };
+    let s = shared.machine.lock().unwrap().settings.clone();
+    let volume = match sound {
+        Sound::Windup => s.windup_volume,
+        Sound::Ding => s.ding_volume,
+        Sound::Tick => s.ticking_volume,
+    };
+    shared.audio.play(sound, volume);
+}
+
+#[tauri::command]
+fn get_prefs(shared: State<Shared>) -> store::Prefs {
+    shared.prefs.lock().unwrap().clone()
+}
+
+/// Sets (or clears) one of the two global shortcuts. `which` is "startStop" or "answer".
+#[tauri::command]
+fn set_shortcut(app: AppHandle, shared: State<Shared>, which: String, accelerator: Option<String>) -> Result<store::Prefs, String> {
+    let new: Option<Shortcut> = match &accelerator {
+        Some(a) => Some(a.parse().map_err(|_| format!("\"{a}\" is not a shortcut I can use"))?),
+        None => None,
+    };
+    let mut prefs = shared.prefs.lock().unwrap();
+    let slot = match which.as_str() {
+        "startStop" => &mut prefs.start_stop_shortcut,
+        "answer" => &mut prefs.answer_shortcut,
+        _ => return Err("unknown shortcut".into()),
+    };
+    let gs = app.global_shortcut();
+    let old: Option<Shortcut> = slot.as_deref().and_then(|a| a.parse().ok());
+    if let Some(sc) = new {
+        if Some(sc) != old {
+            gs.register(sc).map_err(|_| "Another app is already using that shortcut".to_string())?;
+        }
+    }
+    if let Some(sc) = old {
+        if Some(sc) != new {
+            let _ = gs.unregister(sc);
+        }
+    }
+    *slot = accelerator;
+    store::save_prefs(&shared.config_dir, &prefs);
+    Ok(prefs.clone())
+}
+
+#[tauri::command]
+fn get_autostart(app: AppHandle) -> bool {
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
+#[tauri::command]
+fn set_autostart(app: AppHandle, enabled: bool) -> bool {
+    let manager = app.autolaunch();
+    let _ = if enabled { manager.enable() } else { manager.disable() };
+    manager.is_enabled().unwrap_or(false)
+}
+
 #[tauri::command]
 fn quit(app: AppHandle) {
     app.exit(0);
@@ -312,7 +426,37 @@ fn show_widget(app: &AppHandle) {
 fn main() {
     let app = tauri::Builder::default()
         // A second launch (for example from the Start menu) just brings the widget back.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_widget(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // A launch with a breakbar:// URL or a flag is a command; a plain launch brings the widget back.
+            let commands = protocol::commands_from_args(args.get(1..).unwrap_or(&[]));
+            if commands.is_empty() {
+                show_widget(app);
+            }
+            for c in commands {
+                run_command(app, c);
+            }
+        }))
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    let (start_stop, answer) = {
+                        let p = app.state::<Shared>().prefs.lock().unwrap().clone();
+                        let parse = |a: Option<String>| a.and_then(|a| a.parse::<Shortcut>().ok());
+                        (parse(p.start_stop_shortcut), parse(p.answer_shortcut))
+                    };
+                    if Some(*shortcut) == start_stop {
+                        run_command(app, UrlCommand::Toggle);
+                    } else if Some(*shortcut) == answer {
+                        answer_prompt(app);
+                    }
+                })
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             get_view,
             send,
@@ -324,6 +468,11 @@ fn main() {
             open_settings,
             take_tab,
             app_info,
+            preview_sound,
+            get_prefs,
+            set_shortcut,
+            get_autostart,
+            set_autostart,
             quit
         ])
         .setup(|app| {
@@ -338,8 +487,25 @@ fn main() {
                 anchor: Mutex::new(None),
                 drag: Mutex::new(None),
                 pending_tab: Mutex::new(None),
+                audio: Audio::start(),
+                prefs: Mutex::new(store::load_prefs(&config_dir)),
                 config_dir,
             });
+
+            // Saved shortcuts (a failure just means another app has it; Settings shows and lets you change it).
+            let prefs = app.state::<Shared>().prefs.lock().unwrap().clone();
+            for a in [prefs.start_stop_shortcut, prefs.answer_shortcut].into_iter().flatten() {
+                if let Ok(sc) = a.parse::<Shortcut>() {
+                    let _ = app.global_shortcut().register(sc);
+                }
+            }
+
+            // breakbar:// links, and commands given when the app is first started.
+            protocol::register_scheme();
+            let args: Vec<String> = std::env::args().skip(1).collect();
+            for c in protocol::commands_from_args(&args) {
+                run_command(app.handle(), c);
+            }
 
             // Tray icon: static, lives in the overflow area unless the user pins it.
             let show = MenuItem::with_id(app, "show", "Show BreakBar", true, None::<&str>)?;
@@ -378,19 +544,20 @@ fn main() {
                 loop {
                     std::thread::sleep(Duration::from_millis(250));
                     let at = now();
-                    let view = {
+                    let (view, effects, settings) = {
                         let shared = handle.state::<Shared>();
                         let mut m = shared.machine.lock().unwrap();
                         let before = (m.completed_sessions(), m.long_break_postponed());
-                        let _effects = m.handle(TimerEvent::Tick, at);
+                        let effects = m.handle(TimerEvent::Tick, at);
                         // Save when the set changes, and every 10 s while running (keeps "last active" fresh).
                         ticks = ticks.wrapping_add(1);
                         let changed = before != (m.completed_sessions(), m.long_break_postponed());
                         if changed || (ticks % 40 == 0 && m.state() != TimerState::Idle) {
                             shared.save_state(&m);
                         }
-                        view_of(&m, at)
+                        (view_of(&m, at), effects, m.settings.clone())
                     };
+                    run_effects(&handle, &effects, &settings);
                     let _ = handle.emit("view", view);
                 }
             });
