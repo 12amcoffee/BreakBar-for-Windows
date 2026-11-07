@@ -1,0 +1,6 @@
+BreakBar for Windows
+
+Inspired by TomatoBar (https://github.com/ivoronin/TomatoBar), a menu bar Pomodoro
+timer for macOS. No TomatoBar code is used here. The idea of a Rest window that
+takes over the screen comes from the Flow app. This project is not affiliated with
+either.
