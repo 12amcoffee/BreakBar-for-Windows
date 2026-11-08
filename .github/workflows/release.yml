@@ -1,0 +1,84 @@
+name: release
+
+# Builds the downloads on a clean GitHub Windows machine (so no personal paths end up inside them).
+#   - Push a tag like v2.0.0  -> tests, builds, then publishes a GitHub Release.
+#   - "Run workflow" button   -> builds only; the files are attached to the run as an artifact.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create the release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then V="${GITHUB_REF_NAME#v}"; else V="0.0.0"; fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          # The program's own version must be numeric (x.y.z), so drop any suffix such as -beta.
+          echo "APP_VERSION=${V%%-*}" >> "$GITHUB_ENV"
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Set the version inside the program
+        shell: bash
+        run: |
+          sed -i "0,/^version = .*/s//version = \"$APP_VERSION\"/" app/Cargo.toml
+          sed -i "s/\"version\": \".*\"/\"version\": \"$APP_VERSION\"/" app/tauri.conf.json
+          grep -m1 '^version' app/Cargo.toml; grep -m1 '"version"' app/tauri.conf.json
+
+      - name: Build the installer and the program
+        working-directory: app
+        run: npx --yes @tauri-apps/cli@2 build --bundles nsis
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir dist
+          # Fixed names, so .../releases/latest/download/BreakBar-Setup.exe always works.
+          cp target/release/bundle/nsis/*-setup.exe dist/BreakBar-Setup.exe
+          mkdir portable && cp target/release/BreakBar.exe portable/ && cp LICENSE NOTICE portable/
+          (cd portable && 7z a -tzip ../dist/BreakBar-windows-x64.zip BreakBar.exe LICENSE NOTICE)
+          (cd dist && sha256sum BreakBar-Setup.exe BreakBar-windows-x64.zip | tee "BreakBar-$VERSION.sha256")
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BreakBar-${{ env.VERSION }}
+          path: dist/*
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'NOTES'
+          **Install:** download `BreakBar-Setup.exe` and run it. It installs for your user only (no administrator
+          password). Or download `BreakBar-windows-x64.zip`, unzip it anywhere and run `BreakBar.exe`.
+
+          The program is not code-signed, so Windows SmartScreen shows "Windows protected your PC" the first time.
+          Click **More info**, then **Run anyway**.
+
+          Requires Windows 10 or 11 (64-bit). It needs Microsoft WebView2, which Windows 11 and recent Windows 10
+          already have; the installer fetches it if it is missing.
+          NOTES
+          FILES=(dist/BreakBar-Setup.exe dist/BreakBar-windows-x64.zip "dist/BreakBar-$VERSION.sha256")
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            # You already created this release on the website: keep your title and notes, add the files.
+            gh release upload "$GITHUB_REF_NAME" "${FILES[@]}" --clobber
+          else
+            # Versions starting with 0 (and any with a suffix such as -beta) are pre-releases.
+            FLAGS=""; TITLE="BreakBar for Windows v$VERSION"
+            if [[ "$VERSION" == 0.* || "$VERSION" == *-* ]]; then FLAGS="--prerelease"; TITLE="$TITLE pre-release"; fi
+            gh release create "$GITHUB_REF_NAME" "${FILES[@]}" \
+              --title "$TITLE" --notes-file notes.md --generate-notes $FLAGS
+          fi

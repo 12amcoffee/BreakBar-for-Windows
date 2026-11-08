@@ -1,9 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "BreakBar",
-  "version": "2.0.0",
+  "version": "0.1.0",
   "identifier": "io.github.breakbar.windows",
-  "build": { "frontendDist": "./ui" },
+  "build": {
+    "frontendDist": "./ui"
+  },
   "app": {
     "withGlobalTauri": true,
     "windows": [
@@ -24,10 +26,38 @@
         "minimizable": false
       }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
-    "active": false,
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]
-  }
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "publisher": "BreakBar",
+    "shortDescription": "A floating Pomodoro timer",
+    "longDescription": "BreakBar is a floating Pomodoro timer with a Rest window that takes over your screen when it is time for a break.",
+    "copyright": "MIT licence",
+    "license": "../LICENSE",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "languages": [
+          "English"
+        ]
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
+  },
+  "mainBinaryName": "BreakBar"
 }

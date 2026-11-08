@@ -21,9 +21,37 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - run: cargo build --release -p breakbar-app
+      - name: App tests
+        run: cargo test -p breakbar-app
+      - name: Build the installer and the program
+        working-directory: app
+        run: npx --yes @tauri-apps/cli@2 build --bundles nsis
+      - name: Smoke test (install, start, send a command)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          Write-Host "installer: $($setup.Name) ($([math]::Round($setup.Length/1MB,2)) MB)"
+          Start-Process $setup.FullName -ArgumentList '/S' -Wait
+          $exe = Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter BreakBar.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) { throw "BreakBar.exe was not installed" }
+          Write-Host "installed at $($exe.FullName)"
+          $p = Start-Process $exe.FullName -PassThru
+          Start-Sleep -Seconds 10
+          if ($p.HasExited) { throw "BreakBar exited on its own (code $($p.ExitCode))" }
+          # The app registers breakbar:// for the current user when it starts.
+          reg query "HKCU\Software\Classes\breakbar\shell\open\command"
+          if ($LASTEXITCODE -ne 0) { throw "breakbar:// was not registered" }
+          # A second launch hands its command to the running app.
+          Start-Process $exe.FullName -ArgumentList 'breakbar://start' -Wait
+          Start-Sleep -Seconds 3
+          $state = Get-ChildItem "$env:APPDATA" -Recurse -Filter state.json -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $state) { throw "no state.json: the command did not arrive" }
+          Get-Content $state.FullName
+          Stop-Process $p
       - uses: actions/upload-artifact@v4
         with:
-          name: BreakBar-windows-exe
-          path: target/release/breakbar-app.exe
+          name: BreakBar-windows
+          path: |
+            target/release/BreakBar.exe
+            target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
